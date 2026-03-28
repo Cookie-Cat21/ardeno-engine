@@ -113,43 +113,109 @@ async function postToForum(
   profile: CompetitorProfile,
   client: Client
 ): Promise<void> {
-  const { embeds, files } = buildProfileEmbed(profile)
+  // Get stored snapshot (Instagram post count, site fingerprint, portfolio list)
+  const snapshot = await getCompetitorSnapshot(profile.name)
 
-  // Get the tag ID for this threat level
+  // Run Instagram + website change tracking in parallel with main intel
+  const igUrl = profile.error ? null : await extractInstagramUrl(profile.url)
+
+  const [igResult, changesResult] = await Promise.allSettled([
+    igUrl ? trackInstagram(igUrl, snapshot.ig_post_count) : Promise.resolve(null),
+    trackWebsiteChanges(profile.url, snapshot.site_snapshot, snapshot.portfolio_snapshot)
+  ])
+
+  const ig      = igResult.status      === 'fulfilled' ? igResult.value      : null
+  const changes = changesResult.status === 'fulfilled' ? changesResult.value : null
+
+  // Build all embeds
+  const { embeds: mainEmbeds, files: mainFiles } = buildProfileEmbed(profile)
+  const igData     = ig      ? buildInstagramEmbed(ig, profile.name)       : null
+  const changesEmbed = changes ? buildChangesEmbed(changes, profile.name)   : null
+
+  // Get tag ID
   const tagName = THREAT_TAGS[profile.threatLevel]
   const tag = forum.availableTags.find(t => t.name === tagName)
   const appliedTags = tag ? [tag.id] : []
 
   // Check if thread already exists
-  const existingThreadId = await getCompetitorThread(profile.name)
+  const existingThreadId = snapshot.thread_id
+
+  let threadId: string
 
   if (existingThreadId) {
-    // Thread exists — post an update inside it
     try {
       const thread = await client.channels.fetch(existingThreadId) as any
-      if (thread && thread.send) {
-        await thread.send({ embeds, files })
+      if (thread?.send) {
+        // Post main intel update
+        await thread.send({ embeds: mainEmbeds, files: mainFiles })
 
-        // Update the tag to reflect new threat level
+        // Post Instagram embed
+        if (igData) {
+          await new Promise(r => setTimeout(r, 800))
+          await thread.send({ embeds: igData.embeds, files: igData.files })
+        }
+
+        // Post changes embed (only if something changed)
+        if (changesEmbed) {
+          await new Promise(r => setTimeout(r, 800))
+          await thread.send({ embeds: [changesEmbed] })
+        }
+
+        // Update tag
         if (tag) await thread.setAppliedTags([tag.id]).catch(() => null)
 
-        await upsertCompetitorThread(profile.name, profile.url, existingThreadId)
-        return
+        threadId = existingThreadId
+      } else {
+        throw new Error('Thread not accessible')
       }
     } catch {
-      // Thread was deleted — fall through to create a new one
+      // Thread deleted — create fresh
+      const thread = await forum.threads.create({
+        name: profile.name, appliedTags,
+        message: { embeds: mainEmbeds, files: mainFiles }
+      })
+      threadId = thread.id
+      if (igData) await thread.send({ embeds: igData.embeds, files: igData.files }).catch(() => null)
+      if (changesEmbed) await thread.send({ embeds: [changesEmbed] }).catch(() => null)
     }
+  } else {
+    // First time — create the thread
+    const thread = await forum.threads.create({
+      name: profile.name, appliedTags,
+      message: { embeds: mainEmbeds, files: mainFiles }
+    })
+    threadId = thread.id
+    if (igData) {
+      await new Promise(r => setTimeout(r, 800))
+      await thread.send({ embeds: igData.embeds, files: igData.files }).catch(() => null)
+    }
+    // No changes embed on first run (nothing to compare to)
   }
 
-  // Create a new thread
-  const threadName = `${profile.name}`
-  const thread = await forum.threads.create({
-    name: threadName,
-    appliedTags,
-    message: { embeds, files }
+  // Save everything back to DB
+  await upsertCompetitorThread(profile.name, profile.url, threadId)
+  await updateCompetitorSnapshot(profile.name, {
+    ...(ig?.username       ? { ig_username:        ig.username                   } : {}),
+    ...(ig?.postCount      ? { ig_post_count:       ig.postCount                  } : {}),
+    ...(changes?.newSnapshot          ? { site_snapshot:      changes.newSnapshot          } : {}),
+    ...(changes?.newPortfolioSnapshot ? { portfolio_snapshot: changes.newPortfolioSnapshot } : {}),
   })
+}
 
-  await upsertCompetitorThread(profile.name, profile.url, thread.id)
+// Extract Instagram URL from competitor website HTML
+async function extractInstagramUrl(siteUrl: string): Promise<string | null> {
+  try {
+    const res = await axios.get(siteUrl, {
+      timeout: 8000,
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      maxRedirects: 3
+    })
+    const html = res.data as string
+    const match = html.match(/https?:\/\/(www\.)?instagram\.com\/([a-zA-Z0-9._]+)/i)
+    return match ? match[0] : null
+  } catch {
+    return null
+  }
 }
 
 // ─── Per-competitor analysis ───────────────────────────────────────────────────
