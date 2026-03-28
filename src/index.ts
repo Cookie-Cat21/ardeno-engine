@@ -903,19 +903,17 @@ function runWebsiteAudit(
         .setURL(website)
         .setDescription(formatAuditEmbed(audit))
 
-      // Add Lighthouse scores if available
-      if (lighthouse) {
-        embed.addFields({
-          name: '📊 Lighthouse Scores (Mobile)',
-          value: [
-            `🏎️ Performance   ${lhBadge(lighthouse.performance)}`,
-            `🔍 SEO               ${lhBadge(lighthouse.seo)}`,
-            `♿ Accessibility  ${lhBadge(lighthouse.accessibility)}`,
-            `✅ Best Practices ${lhBadge(lighthouse.bestPractices)}`
-          ].join('\n'),
-          inline: false
-        })
-      }
+      // Always show Lighthouse section — shows N/A if scores unavailable
+      embed.addFields({
+        name: '📊 Lighthouse Scores (Mobile)',
+        value: lighthouse ? [
+          `🏎️ Performance    ${lhBadge(lighthouse.performance)}`,
+          `🔍 SEO                ${lhBadge(lighthouse.seo)}`,
+          `♿ Accessibility   ${lhBadge(lighthouse.accessibility)}`,
+          `✅ Best Practices  ${lhBadge(lighthouse.bestPractices)}`
+        ].join('\n') : `*⏱️ Timed out — site may be blocking Google's servers*`,
+        inline: false
+      })
 
       // Attach screenshot as the embed image — shows the site right in Discord
       const msgOptions: any = { embeds: [embed] }
