@@ -112,7 +112,7 @@ export async function runLeadEngine(
   }
 
   saved.sort((a, b) => b.score - a.score)
-  return { found: businesses.length, saved, errors }
+  return { found: filtered.length, saved, errors }
 }
 
 function timeout(ms: number, msg: string): Promise<never> {
