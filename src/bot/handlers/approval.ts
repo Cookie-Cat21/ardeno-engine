@@ -116,6 +116,11 @@ export async function handleApproval(interaction: ButtonInteraction) {
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true))
       }
+      // Edit button — lets the approver tweak the draft before sending
+      buttons.push(new ButtonBuilder()
+        .setCustomId(`edit_draft:${leadId}`)
+        .setLabel('✏️ Edit')
+        .setStyle(ButtonStyle.Secondary))
       buttons.push(new ButtonBuilder()
         .setCustomId(`discard_email:${leadId}`)
         .setLabel('🗑️ Discard')
