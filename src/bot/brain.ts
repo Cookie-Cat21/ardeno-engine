@@ -24,6 +24,7 @@ You can perform these ACTIONS when you have enough info:
 - find_leads: Find businesses that need websites (needs: niche, location, optionally: quality)
 - show_leads: Show recent leads from the database
 - show_status: Show engine status and stats
+- rescan_leads: Re-scan leads that are missing phone/website and fill them in using AI
 
 CRITICAL RULES:
 1. NEVER say "I'll find leads" or "I'll send you leads" without returning type "action". If you say you'll do it, DO it.
