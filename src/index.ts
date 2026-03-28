@@ -281,12 +281,12 @@ client.once(Events.ClientReady, async (c) => {
     if (!channel) return
 
     try {
-      const stats = await getDailyStats()
-      const { title, description, color } = formatDailyReport(stats, new Date())
+      const { today, yesterday } = await getDailyStatsWithComparison()
+      const { title, description, color } = formatDailyReport(today, yesterday, new Date())
       const mentions = Object.values(TEAM).map(m => `<@${m.discordId}>`).join(' ')
 
       await channel.send({
-        content: stats.found > 0 || stats.responded > 0 ? mentions : undefined,
+        content: today.found > 0 || today.responded > 0 ? mentions : undefined,
         embeds: [new EmbedBuilder()
           .setColor(color)
           .setTitle(title)
