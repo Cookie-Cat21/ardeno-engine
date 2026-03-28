@@ -23,6 +23,7 @@ import { handleApproval } from './bot/handlers/approval'
 import { draftOutreachEmail } from './agents/emailDrafter'
 import { ensureForumTags, getTagIds, getNicheTagName } from './bot/forumTags'
 import { TEAM } from './config/team'
+import { initWhatsApp } from './whatsapp/WAManager'
 
 dotenv.config()
 
@@ -39,6 +40,9 @@ const client = new Client({
 client.once(Events.ClientReady, async (c) => {
   console.log(`\n🚀 Ardeno OS online as ${c.user.tag}`)
   c.user.setActivity('ao help', { type: ActivityType.Listening })
+
+  // Init WhatsApp sessions for all team members
+  initWhatsApp(c).catch(console.error)
 
   // Auto-create forum tags
   const forumId = process.env.DISCORD_LEADS_FORUM_ID
@@ -340,7 +344,8 @@ client.on(Events.MessageCreate, async (message: Message) => {
             const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
               new ButtonBuilder().setCustomId(`approve_lead:${lead.id}`).setLabel('✅ Approve').setStyle(ButtonStyle.Success),
               new ButtonBuilder().setCustomId(`reject_lead:${lead.id}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger),
-              new ButtonBuilder().setCustomId(`later_lead:${lead.id}`).setLabel('⏳ Later').setStyle(ButtonStyle.Secondary)
+              new ButtonBuilder().setCustomId(`later_lead:${lead.id}`).setLabel('⏳ Later').setStyle(ButtonStyle.Secondary),
+              new ButtonBuilder().setCustomId(`delete_lead:${lead.id}`).setLabel('🗑️ Delete').setStyle(ButtonStyle.Danger)
             )
 
             if (forum && forum.type === ChannelType.GuildForum) {
@@ -532,7 +537,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return
   const [action, leadId] = interaction.customId.split(':')
 
-  if (['approve_lead', 'reject_lead', 'later_lead', 'send_email', 'discard_email'].includes(action)) {
+  if (['approve_lead', 'reject_lead', 'later_lead', 'send_email', 'discard_email', 'send_wa'].includes(action)) {
+
     await handleApproval(interaction)
 
     // When Later is clicked, set a 3-day reminder
@@ -578,6 +584,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
       ],
       components: []
     })
+  }
+
+  // Delete individual lead
+  if (action === 'delete_lead') {
+    await interaction.deferUpdate()
+    await supabase.from('leads').delete().eq('id', leadId)
+    // Delete the forum thread
+    const thread = interaction.channel
+    if (thread && 'delete' in thread) {
+      await (thread as any).delete().catch(() => null)
+    } else {
+      await interaction.message.delete().catch(() => null)
+    }
   }
 
   if (action === 'cancel_clear_leads') {

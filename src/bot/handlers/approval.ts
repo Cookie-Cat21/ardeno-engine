@@ -2,6 +2,7 @@ import { ButtonInteraction, EmbedBuilder, Colors, ActionRowBuilder, ButtonBuilde
 import { getLeadById, updateLeadStatus, supabase } from '../../db/supabase'
 import { draftOutreachEmail, sendEmail } from '../../agents/emailDrafter'
 import { getMember } from '../../config/team'
+import { draftWhatsAppMessage, sendWhatsAppMessage, isReady } from '../../whatsapp/WAManager'
 
 // Apply a forum tag by name to the current thread
 async function applyForumTag(interaction: ButtonInteraction, tagName: string) {
@@ -52,37 +53,76 @@ export async function handleApproval(interaction: ButtonInteraction) {
 
     // Draft the email with Groq, personalised for the approver
     try {
-      const draft = await draftOutreachEmail(lead, approver)
+      const hasEmail = !!lead.email
+      const hasPhone = !!lead.phone
+      const waReady = approver ? isReady(approver.discordId) : false
 
-      const emailEmbed = new EmbedBuilder()
-        .setColor(0xff4d30)
-        .setTitle(`✉️ Email Draft — ${lead.business_name}`)
-        .addFields(
-          { name: '📬 To', value: draft.to || '_No email found — add manually_' },
-          { name: '📝 Subject', value: draft.subject },
-          { name: '💬 Body', value: `\`\`\`${draft.body}\`\`\`` }
+      // Draft both email and WhatsApp message in parallel
+      const [emailDraft, waDraft] = await Promise.all([
+        hasEmail ? draftOutreachEmail(lead, approver) : null,
+        hasPhone && waReady ? draftWhatsAppMessage(lead, approver!) : null
+      ])
+
+      if (emailDraft) {
+        await supabase.from('leads').update({
+          email_draft_subject: emailDraft.subject,
+          email_draft_body: emailDraft.body,
+          email_to: emailDraft.to
+        }).eq('id', leadId)
+      }
+
+      if (waDraft) {
+        await supabase.from('leads').update({ wa_draft: waDraft }).eq('id', leadId)
+      }
+
+      // Build outreach embed
+      const fields: any[] = []
+      if (emailDraft) {
+        fields.push(
+          { name: '📝 Email Subject', value: emailDraft.subject },
+          { name: '✉️ Email Body', value: `\`\`\`${emailDraft.body}\`\`\`` }
         )
-        .setFooter({ text: `Drafted for ${approver?.name ?? 'you'} · Approve to send · Discard to cancel` })
+      }
+      if (waDraft) {
+        fields.push({ name: '📱 WhatsApp Message', value: `\`\`\`${waDraft}\`\`\`` })
+      }
+      if (!emailDraft && !waDraft) {
+        fields.push({ name: '⚠️ No contact info', value: 'No email or phone found for this lead.' })
+      }
 
-      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder()
+      const outreachEmbed = new EmbedBuilder()
+        .setColor(0xff4d30)
+        .setTitle(`📬 Outreach Draft — ${lead.business_name}`)
+        .addFields(fields)
+        .setFooter({ text: `Drafted for ${approver?.name ?? 'you'} · Choose how to reach out` })
+
+      // Build buttons based on available contact info
+      const buttons: ButtonBuilder[] = []
+      if (hasEmail) {
+        buttons.push(new ButtonBuilder()
           .setCustomId(`send_email:${leadId}`)
           .setLabel('📤 Send Email')
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId(`discard_email:${leadId}`)
-          .setLabel('🗑️ Discard')
-          .setStyle(ButtonStyle.Danger)
-      )
+          .setStyle(ButtonStyle.Primary))
+      }
+      if (hasPhone && waReady) {
+        buttons.push(new ButtonBuilder()
+          .setCustomId(`send_wa:${leadId}`)
+          .setLabel('📱 Send WhatsApp')
+          .setStyle(ButtonStyle.Success))
+      } else if (hasPhone && !waReady) {
+        buttons.push(new ButtonBuilder()
+          .setCustomId(`send_wa:${leadId}`)
+          .setLabel('📱 WhatsApp (not connected)')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true))
+      }
+      buttons.push(new ButtonBuilder()
+        .setCustomId(`discard_email:${leadId}`)
+        .setLabel('🗑️ Discard')
+        .setStyle(ButtonStyle.Danger))
 
-      // Store draft in DB temporarily
-      await supabase.from('leads').update({
-        email_draft_subject: draft.subject,
-        email_draft_body: draft.body,
-        email_to: draft.to
-      }).eq('id', leadId)
-
-      await interaction.followUp({ embeds: [emailEmbed], components: [row] })
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons)
+      await interaction.followUp({ embeds: [outreachEmbed], components: [row] })
 
     } catch (e: any) {
       await interaction.followUp({
@@ -134,6 +174,41 @@ export async function handleApproval(interaction: ButtonInteraction) {
         content: `❌ Failed to send: ${e.message}`,
         ephemeral: true
       })
+    }
+
+  } else if (action === 'send_wa') {
+    const approver = getMember(interaction.user.id)
+    if (!approver) {
+      await interaction.followUp({ content: '❌ Your Discord account is not in the team config.', ephemeral: true })
+      return
+    }
+
+    const { data } = await supabase
+      .from('leads')
+      .select('wa_draft, phone, business_name')
+      .eq('id', leadId)
+      .single()
+
+    if (!data?.phone) {
+      await interaction.followUp({ content: '⚠️ No phone number found for this lead.', ephemeral: true })
+      return
+    }
+
+    try {
+      await sendWhatsAppMessage(approver.discordId, data.phone, data.wa_draft)
+      await updateLeadStatus(leadId, 'contacted')
+      await applyForumTag(interaction, 'Reached Out')
+
+      await interaction.message.edit({
+        embeds: [EmbedBuilder.from(interaction.message.embeds[0])
+          .setColor(Colors.Green)
+          .setTitle(`✅ WhatsApp Sent — ${data.business_name}`)
+          .setFooter({ text: `Sent from ${approver.name}'s WhatsApp` })
+        ],
+        components: []
+      })
+    } catch (e: any) {
+      await interaction.followUp({ content: `❌ WhatsApp send failed: ${e.message}`, ephemeral: true })
     }
 
   } else if (action === 'discard_email') {
