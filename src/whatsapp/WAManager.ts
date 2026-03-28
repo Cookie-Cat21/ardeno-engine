@@ -163,6 +163,9 @@ export async function sendWhatsAppMessage(
   const chatId = `${formatted}@c.us`
 
   await wa.sendMessage(chatId, message)
+
+  // Register this phone so we watch for their reply
+  markPhoneSent(formatted)
 }
 
 function formatPhone(phone: string): string {
