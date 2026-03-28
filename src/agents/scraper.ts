@@ -149,14 +149,66 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
   }
 }
 
-async function scrollResults(page: any, targetCount: number) {
-  const maxScrolls = Math.ceil(targetCount / 5)
-  for (let i = 0; i < maxScrolls; i++) {
+async function scrollResults(page: any, targetCount: number): Promise<void> {
+  const PAUSE        = 1800   // ms to wait after each scroll for new cards to render
+  const MAX_ATTEMPTS = 25     // hard cap — never scroll more than 25 times
+  let lastCount      = 0
+  let stuckFor       = 0      // how many scrolls in a row with no new results
+
+  console.log(`[Scraper] Scrolling to load up to ${targetCount} results...`)
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    // Count only real business cards (they always contain an anchor with aria-label)
+    const currentCount = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('[role="feed"] > div'))
+        .filter(el => el.querySelector('a[aria-label]') !== null)
+        .length
+    )
+
+    if (currentCount >= targetCount) {
+      console.log(`[Scraper] Reached target (${currentCount} cards loaded)`)
+      break
+    }
+
+    // Check if Google Maps says "You've reached the end of the list"
+    const atEnd = await page.evaluate(() => {
+      const text = document.body?.innerText ?? ''
+      return text.includes("You've reached the end of the list") ||
+             text.includes("Reached the end of the list")
+    })
+
+    if (atEnd) {
+      console.log(`[Scraper] End of list reached (${currentCount} total)`)
+      break
+    }
+
+    // Scroll to the absolute bottom of the feed to trigger lazy loading
     await page.evaluate(() => {
       const feed = document.querySelector('[role="feed"]')
-      if (feed) feed.scrollTop += 600
+      if (feed) {
+        feed.scrollTop = feed.scrollHeight
+
+        // Also nudge the last visible card into view (helps trigger loading)
+        const cards = feed.querySelectorAll('div')
+        const last  = cards[cards.length - 1] as HTMLElement | undefined
+        last?.scrollIntoView?.({ behavior: 'smooth', block: 'end' })
+      }
     })
-    await sleep(1200)
+
+    await sleep(PAUSE)
+
+    // Detect if we're genuinely stuck — no new cards after 3 consecutive scrolls
+    if (currentCount === lastCount) {
+      stuckFor++
+      if (stuckFor >= 3) {
+        console.log(`[Scraper] No new results after ${stuckFor} scrolls — stopping at ${currentCount}`)
+        break
+      }
+    } else {
+      stuckFor = 0
+    }
+
+    lastCount = currentCount
   }
 }
 
