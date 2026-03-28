@@ -395,6 +395,85 @@ client.on(Events.MessageCreate, async (message: Message) => {
     return
   }
 
+  // ── Mega hunt: ao mega hunt [city] ──────────────────────────────────────────
+  if (/\bmega\s*hunt\b/i.test(userText) || /\bfull\s*(scan|hunt)\b/i.test(userText)) {
+    // Extract optional city — default to Colombo
+    const cityMatch = userText.match(/(?:mega hunt|full scan|full hunt)\s+([A-Za-z]+)/i)
+    const city = cityMatch ? cityMatch[1].trim() : 'Colombo'
+
+    const forumId   = process.env.DISCORD_LEADS_FORUM_ID
+    const forum     = forumId ? await client.channels.fetch(forumId).catch(() => null) : null
+    const tagCache  = forumId ? await getTagIds(forumId) : {}
+
+    await message.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0xff4d30)
+        .setTitle(`🔥 Mega Hunt — ${city}`)
+        .setDescription(
+          `Scanning **all ${ALL_NICHES.length} niches** in **${city}**.\n\n` +
+          `This will take a while — leads will appear in <#${forumId}> as they're found.\n` +
+          `Progress updates every 10 niches.`
+        )
+        .setFooter({ text: 'Ardeno OS — Mega Hunt' })
+      ]
+    })
+
+    // Run in background — don't await
+    ;(async () => {
+      let totalFound = 0
+      let totalSaved = 0
+      let done       = 0
+
+      for (const niche of ALL_NICHES) {
+        try {
+          const result = await runLeadEngine(niche, city, 20)
+          totalFound += result.found
+          totalSaved += result.saved.length
+          done++
+
+          // Post each saved lead to the forum
+          for (const lead of result.saved) {
+            try {
+              await postLeadToForum(lead, forum, tagCache, forumId, client)
+            } catch {}
+          }
+
+          // Progress update every 10 niches
+          if (done % 10 === 0 || done === ALL_NICHES.length) {
+            const remaining = ALL_NICHES.length - done
+            await message.channel.send({
+              embeds: [new EmbedBuilder()
+                .setColor(0x5865F2)
+                .setTitle(`🔥 Mega Hunt — ${done}/${ALL_NICHES.length} niches done`)
+                .setDescription(
+                  `**${totalSaved}** leads saved so far\n` +
+                  `${remaining > 0 ? `**${remaining}** niches remaining...` : '✅ All niches complete!'}`
+                )
+              ]
+            })
+          }
+        } catch (e: any) {
+          console.error(`[MegaHunt] Error on niche "${niche}":`, e.message)
+        }
+      }
+
+      // Final summary
+      const founders = Object.keys(TEAM)
+      for (const discordId of founders) {
+        try {
+          const user = await client.users.fetch(discordId)
+          await user.send(
+            `🔥 **Mega Hunt Complete — ${city}**\n` +
+            `Scanned **${ALL_NICHES.length} niches** · Found **${totalFound}** businesses · Saved **${totalSaved}** leads\n` +
+            `Check <#${forumId}> for all results.`
+          )
+        } catch {}
+      }
+    })()
+
+    return
+  }
+
   // Shortcut: ao stats
   if (/\bstats?\b/i.test(userText) || /how (are we doing|many leads)/i.test(userText)) {
     const [total, approved, contacted, rejected, thisWeek] = await Promise.all([
