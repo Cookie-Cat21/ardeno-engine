@@ -885,8 +885,6 @@ function runWebsiteAudit(
   thread: { send: (opts: any) => Promise<any> },
   delayMs = 0
 ): void {
-  console.log(`[AuditEmbed] lighthouse data for ${website}:`, JSON.stringify(lighthouse))
-
   const doAudit = async () => {
     if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs))
     return analyzeWebsite(website, lighthouse)
