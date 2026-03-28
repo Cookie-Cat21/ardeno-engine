@@ -677,6 +677,12 @@ client.on(Events.MessageCreate, async (message: Message) => {
             { name: '📞 Phone', value: lead.phone ?? 'Not found', inline: true },
             { name: '📧 Email', value: (lead as any).email ?? 'Not found', inline: true },
             { name: '🌐 Website', value: lead.website ?? '❌ No website', inline: true },
+            ...((() => {
+              const links: string[] = []
+              if (lead.instagram) links.push(`[Instagram](${lead.instagram})`)
+              if (lead.facebook)  links.push(`[Facebook](${lead.facebook})`)
+              return links.length > 0 ? [{ name: '📱 Socials', value: links.join(' · '), inline: true }] : []
+            })()),
             ...lhField,
             { name: '🔍 Why this lead', value: lead.score_reasons.map(r => `• ${r}`).join('\n') || 'No reasons' },
             { name: '📉 Their gaps', value: lead.gap_analysis },
