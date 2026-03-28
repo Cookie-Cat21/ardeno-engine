@@ -1,0 +1,29 @@
+{
+  "name": "ardeno-engine",
+  "version": "1.0.0",
+  "description": "Ardeno OS — Autonomous Agency Engine. Lead generation, demo building, outreach — fully automated.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "register-commands": "ts-node src/bot/register.ts"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@supabase/supabase-js": "^2.47.0",
+    "axios": "^1.7.9",
+    "cheerio": "^1.0.0",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7",
+    "groq-sdk": "^0.8.0",
+    "puppeteer": "^24.40.0",
+    "puppeteer-core": "^23.11.1"
+  },
+  "devDependencies": {
+    "@types/cheerio": "^0.22.35",
+    "@types/node": "^22.10.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}
