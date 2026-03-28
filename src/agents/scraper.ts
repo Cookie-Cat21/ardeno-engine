@@ -1,6 +1,45 @@
 import puppeteer from 'puppeteer'
 import axios from 'axios'
+import Groq from 'groq-sdk'
 import { getBrowserConfig } from '../utils/browser'
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+
+/** Use Groq to extract phone + website from raw Google Maps page text */
+async function extractDetailsWithAI(pageText: string): Promise<{ phone?: string; website?: string }> {
+  try {
+    const res = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{
+        role: 'user',
+        content: `Extract the phone number and website URL from this Google Maps business page text.
+
+Return ONLY valid JSON in this exact format (use null if not found):
+{"phone": "+94 XX XXX XXXX", "website": "https://example.com"}
+
+Rules:
+- Phone must be the main business phone (not whatsapp link text)
+- Website must be a full URL starting with http
+- If not found, use null
+
+Page text:
+${pageText.slice(0, 3000)}`
+      }],
+      temperature: 0,
+      max_tokens: 80
+    })
+
+    const raw = res.choices[0].message.content?.trim() ?? '{}'
+    const json = raw.match(/\{.*\}/s)?.[0] ?? '{}'
+    const parsed = JSON.parse(json)
+    return {
+      phone: parsed.phone ?? undefined,
+      website: parsed.website ?? undefined
+    }
+  } catch {
+    return {}
+  }
+}
 
 export interface RawBusiness {
   name: string
