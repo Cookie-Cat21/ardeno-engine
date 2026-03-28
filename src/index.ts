@@ -1049,14 +1049,24 @@ client.on(Events.MessageCreate, async (message: Message) => {
     }
 
   } else if (response.type === 'action' && response.action === 'rescan_leads') {
-    const { data: leads, error } = await supabase
-      .from('leads')
-      .select('id, business_name, google_maps_url, phone, website')
-      .or('phone.is.null,website.is.null')
-      .order('created_at', { ascending: false })
-      .limit(50)
+    // Paginate through ALL leads with missing phone/website (no hard cap)
+    const allLeads: any[] = []
+    const PAGE = 200
+    let from = 0
+    while (true) {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id, business_name, google_maps_url, phone, website, discord_message_id')
+        .or('phone.is.null,website.is.null')
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      allLeads.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
 
-    if (error || !leads || leads.length === 0) {
+    if (allLeads.length === 0) {
       await message.reply('✅ No leads with missing contact info found.')
       return
     }
@@ -1065,11 +1075,11 @@ client.on(Events.MessageCreate, async (message: Message) => {
       embeds: [new EmbedBuilder()
         .setColor(0xff4d30)
         .setTitle('🔄 Rescanning leads...')
-        .setDescription(`Found **${leads.length}** leads with missing phone/website. Scanning now...`)
+        .setDescription(`Found **${allLeads.length}** leads with missing phone/website. This will take a while...`)
       ]
     })
 
-    const { updated, skipped } = await rescanMissingLeads(leads, async (progress) => {
+    const { updated, skipped, updatedLeads } = await rescanMissingLeads(allLeads, async (progress) => {
       await statusMsg.edit({
         embeds: [new EmbedBuilder()
           .setColor(0xff4d30)
@@ -1079,11 +1089,45 @@ client.on(Events.MessageCreate, async (message: Message) => {
       })
     })
 
+    // Update Discord forum thread embeds for every lead we patched
+    const leadsForumChannel = client.channels.cache.get(process.env.DISCORD_LEADS_FORUM_ID!) as ForumChannel | null
+    let discordUpdated = 0
+    if (leadsForumChannel) {
+      for (const updated_lead of updatedLeads) {
+        if (!updated_lead.discord_message_id) continue
+        try {
+          const thread = await leadsForumChannel.threads.fetch(updated_lead.discord_message_id).catch(() => null)
+          if (!thread) continue
+          const msgs = await thread.messages.fetch({ limit: 1 })
+          const firstMsg = msgs.first()
+          if (!firstMsg || firstMsg.embeds.length === 0) continue
+
+          const old = firstMsg.embeds[0]
+          const newEmbed = EmbedBuilder.from(old)
+          // Rebuild the fields with updated phone/website
+          const newFields = old.fields.map(f => {
+            if (f.name === '📞 Phone' && updated_lead.phone)   return { ...f, value: updated_lead.phone }
+            if (f.name === '🌐 Website' && updated_lead.website) return { ...f, value: updated_lead.website }
+            return f
+          })
+          newEmbed.setFields(newFields)
+          await firstMsg.edit({ embeds: [newEmbed] })
+          discordUpdated++
+        } catch {
+          // Non-critical — Supabase is already updated
+        }
+      }
+    }
+
     await statusMsg.edit({
       embeds: [new EmbedBuilder()
         .setColor(Colors.Green)
         .setTitle('✅ Rescan complete')
-        .setDescription(`Updated **${updated}** leads · Skipped **${skipped}** (no data found or no Maps URL)`)
+        .setDescription(
+          `Updated **${updated}** leads in database\n` +
+          `Refreshed **${discordUpdated}** Discord posts\n` +
+          `Skipped **${skipped}** (no data found or no Maps URL)`
+        )
       ]
     })
 
