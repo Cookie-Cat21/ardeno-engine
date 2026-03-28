@@ -26,7 +26,7 @@ import { ensureForumTags, getTagIds, getNicheTagName } from './bot/forumTags'
 import { TEAM } from './config/team'
 import { initWhatsApp, onWhatsAppReply } from './whatsapp/WAManager'
 import { getTodaysTargets, getTodaysNiches } from './scheduler/dailyHunt'
-import { getDailyStats, formatDailyReport } from './scheduler/dailyReport'
+import { getDailyStats, getDailyStatsWithComparison, formatDailyReport } from './scheduler/dailyReport'
 import { lighthouseBlock, lighthouseSummary } from './agents/lighthouse'
 import { analyzeWebsite, formatAuditEmbed } from './agents/websiteAnalyzer'
 
