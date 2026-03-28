@@ -13,10 +13,27 @@ export interface LighthouseScores {
  * for higher quota (25k/day vs 400/day unauthenticated).
  * Returns null if the URL is unreachable or the API fails.
  */
+// Social media sites always return 429 or block PageSpeed API — skip them
+const SKIP_DOMAINS = ['instagram.com', 'facebook.com', 'tiktok.com', 'twitter.com', 'x.com', 'linkedin.com', 'youtube.com']
+
+export function isSocialMediaUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase()
+    return SKIP_DOMAINS.some(d => hostname.includes(d))
+  } catch {
+    return false
+  }
+}
+
 export async function getLighthouseScores(url: string): Promise<LighthouseScores | null> {
   try {
+    if (isSocialMediaUrl(url)) {
+      console.log(`[Lighthouse] Skipping social media URL: ${url}`)
+      return null
+    }
+
     const apiKey = process.env.GOOGLE_PLACES_API_KEY ?? process.env.PAGESPEED_API_KEY
-    console.log(`[Lighthouse] Checking ${url} (key: ${apiKey ? '✅' : '❌ no key — enable PageSpeed Insights API in Google Cloud Console'})`)
+    console.log(`[Lighthouse] Checking ${url} (key: ${apiKey ? '✅' : '❌ no key'})`)
 
     const base = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed'
     const query = [
