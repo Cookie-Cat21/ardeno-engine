@@ -216,11 +216,52 @@ export async function handleApproval(interaction: ButtonInteraction) {
       await interaction.followUp({ content: `❌ WhatsApp send failed: ${e.message}`, ephemeral: true })
     }
 
+  } else if (action === 'edit_draft') {
+    // DM the approver asking them to send their edited version
+    try {
+      const dmChannel = await interaction.user.createDM()
+
+      // Grab the current draft text from the embed description
+      const currentDraft = interaction.message.embeds[0]?.description ?? ''
+
+      await dmChannel.send(
+        `✏️ **Edit your outreach draft for this lead**\n\n` +
+        `Current message:\n\`\`\`\n${currentDraft}\n\`\`\`\n` +
+        `Reply to this DM with your edited version and I'll update the draft.`
+      )
+
+      await interaction.followUp({ content: '📬 Check your DMs — reply with your edited message.', ephemeral: true })
+
+      // Wait for their reply in DM (60 second window)
+      const collected = await dmChannel.awaitMessages({
+        max: 1,
+        time: 120_000,
+        filter: m => m.author.id === interaction.user.id
+      }).catch(() => null)
+
+      const editedText = collected?.first()?.content?.trim()
+      if (!editedText) {
+        await dmChannel.send('⏰ Timed out — draft was not updated. Go back to Discord and try again.')
+        return
+      }
+
+      // Update the draft embed with the new text
+      const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+        .setDescription(editedText)
+        .setFooter({ text: `Edited by ${interaction.user.username} · Choose how to reach out` })
+
+      await interaction.message.edit({ embeds: [updatedEmbed], components: interaction.message.components })
+      await dmChannel.send('✅ Draft updated! Go back to Discord to send it.')
+
+    } catch (e: any) {
+      await interaction.followUp({ content: `❌ Could not open DM: ${e.message}`, ephemeral: true })
+    }
+
   } else if (action === 'discard_email') {
     await interaction.message.edit({
       embeds: [EmbedBuilder.from(interaction.message.embeds[0])
         .setColor(Colors.Grey)
-        .setTitle('🗑️ Email Discarded')
+        .setTitle('🗑️ Discarded')
       ],
       components: []
     })
