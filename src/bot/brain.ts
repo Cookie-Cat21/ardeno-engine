@@ -72,7 +72,7 @@ export async function think(
 
 async function callGemini(prompt: string): Promise<string> {
   const model = getGemini().getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash',
     systemInstruction: SYSTEM_PROMPT
   })
   const result = await model.generateContent(prompt)

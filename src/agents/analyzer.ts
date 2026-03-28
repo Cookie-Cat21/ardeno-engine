@@ -35,6 +35,7 @@ export async function analyzeLead(
     niche,
     location,
     phone: business.phone,
+    email: business.email,
     website: business.website,
     google_maps_url: business.google_maps_url,
     google_rating: business.rating,
@@ -84,7 +85,7 @@ Return ONLY valid JSON, no markdown:
 }
 
 async function callGemini(prompt: string): Promise<string> {
-  const model = getGemini().getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = getGemini().getGenerativeModel({ model: 'gemini-2.0-flash' })
   const result = await model.generateContent(prompt)
   return result.response.text()
 }

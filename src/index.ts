@@ -14,11 +14,15 @@ import {
   ChannelType
 } from 'discord.js'
 import dotenv from 'dotenv'
+import cron from 'node-cron'
 import { think } from './bot/brain'
 import { getConversation, updateConversation } from './bot/conversation'
 import { runLeadEngine } from './agents/leadRunner'
 import { updateLeadStatus, supabase } from './db/supabase'
 import { handleApproval } from './bot/handlers/approval'
+import { draftOutreachEmail } from './agents/emailDrafter'
+import { ensureForumTags, getTagIds, getNicheTagName } from './bot/forumTags'
+import { TEAM } from './config/team'
 
 dotenv.config()
 
@@ -32,9 +36,57 @@ const client = new Client({
   ]
 })
 
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
   console.log(`\n🚀 Ardeno OS online as ${c.user.tag}`)
   c.user.setActivity('ao help', { type: ActivityType.Listening })
+
+  // Auto-create forum tags
+  const forumId = process.env.DISCORD_LEADS_FORUM_ID
+  if (forumId) {
+    const forum = await c.channels.fetch(forumId).catch(() => null) as ForumChannel | null
+    if (forum?.type === ChannelType.GuildForum) {
+      await ensureForumTags(forum).catch(console.error)
+    }
+  }
+
+  // Daily cron: 9am Sri Lanka time (UTC+5:30 = 3:30 UTC)
+  cron.schedule('30 3 * * *', async () => {
+    console.log('[Cron] Checking for snoozed leads...')
+    const now = new Date().toISOString()
+
+    const { data: snoozed } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('status', 'found')
+      .lte('remind_at', now)
+      .not('remind_at', 'is', null)
+
+    if (!snoozed?.length) return
+
+    const generalChannelId = process.env.DISCORD_APPROVAL_CHANNEL_ID
+    const channel = generalChannelId
+      ? await c.channels.fetch(generalChannelId).catch(() => null) as TextChannel | null
+      : null
+
+    if (!channel) return
+
+    for (const lead of snoozed) {
+      // Ping both founders
+      const mentions = Object.values(TEAM).map(m => `<@${m.discordId}>`).join(' ')
+      await channel.send({
+        content: mentions,
+        embeds: [new EmbedBuilder()
+          .setColor(0xff4d30)
+          .setTitle('⏰ Snoozed Lead Reminder')
+          .setDescription(`**${lead.business_name}** (${lead.niche} · ${lead.location}) has been sitting on Later for 3 days.\n\nScore: **${lead.score}/100** — time to action it!`)
+          .setFooter({ text: 'Find it in the #leads forum to approve or reject' })
+        ]
+      })
+
+      // Clear the reminder so it doesn't ping again
+      await supabase.from('leads').update({ remind_at: null }).eq('id', lead.id)
+    }
+  })
 })
 
 client.on(Events.MessageCreate, async (message: Message) => {
@@ -70,6 +122,126 @@ client.on(Events.MessageCreate, async (message: Message) => {
   // Show typing indicator
   if ('sendTyping' in message.channel) await message.channel.sendTyping()
 
+  // Shortcut: ao stats
+  if (/\bstats?\b/i.test(userText) || /how (are we doing|many leads)/i.test(userText)) {
+    const [total, approved, contacted, rejected, thisWeek] = await Promise.all([
+      supabase.from('leads').select('id', { count: 'exact', head: true }),
+      supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'approved'),
+      supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'contacted'),
+      supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'rejected'),
+      supabase.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+    ])
+
+    const t = total.count ?? 0
+    const a = approved.count ?? 0
+    const c = contacted.count ?? 0
+    const r = rejected.count ?? 0
+    const w = thisWeek.count ?? 0
+    const convRate = t > 0 ? Math.round((c / t) * 100) : 0
+
+    await message.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0xff4d30)
+        .setTitle('📊 Ardeno OS Stats')
+        .addFields(
+          { name: '🔍 Total Leads', value: `${t}`, inline: true },
+          { name: '📅 This Week', value: `${w}`, inline: true },
+          { name: '✅ Approved', value: `${a}`, inline: true },
+          { name: '📤 Contacted', value: `${c}`, inline: true },
+          { name: '❌ Rejected', value: `${r}`, inline: true },
+          { name: '📈 Contact Rate', value: `${convRate}%`, inline: true }
+        )
+        .setFooter({ text: 'Ardeno OS — Lead Engine' })
+      ]
+    })
+    return
+  }
+
+  // Shortcut: ao clear leads
+  if (/\bclear\b.*(lead|all)/i.test(userText) || /\bdelete\b.*(lead|all)/i.test(userText)) {
+    const { count } = await supabase.from('leads').select('id', { count: 'exact', head: true })
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('confirm_clear_leads').setLabel(`🗑️ Yes, delete all ${count} leads`).setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('cancel_clear_leads').setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+    )
+    await message.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(Colors.Red)
+        .setTitle('⚠️ Clear All Leads?')
+        .setDescription(`This will permanently delete **${count} leads** from the database **and** remove all threads from the #leads forum.\n\nAre you sure?`)
+      ],
+      components: [row]
+    })
+    return
+  }
+
+  // Shortcut: detect draft email intent
+  const draftEmailIntent = /\b(draft|write|retry|resend|generate).*(email|outreach|mail)/i.test(userText)
+    || /\bemail.*(draft|write|retry|for)\b/i.test(userText)
+
+  if (draftEmailIntent) {
+    // Extract business name from message
+    const nameMatch = userText.match(/(?:for|to)\s+(.+)/i)
+    const searchTerm = nameMatch?.[1]?.trim()
+
+    const query = supabase.from('leads').select('*').eq('status', 'approved').order('created_at', { ascending: false })
+    if (searchTerm) query.ilike('business_name', `%${searchTerm}%`)
+
+    const { data: leads } = await query.limit(1)
+    const lead = leads?.[0]
+
+    if (!lead) {
+      await message.reply(`No approved lead found${searchTerm ? ` matching "${searchTerm}"` : ''}. Approve a lead first.`)
+      return
+    }
+
+    const statusMsg = await message.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0xff4d30)
+        .setTitle('✉️ Drafting email...')
+        .setDescription(`Writing personalised outreach for **${lead.business_name}**`)
+      ]
+    })
+
+    try {
+      const draft = await draftOutreachEmail(lead)
+
+      await supabase.from('leads').update({
+        email_draft_subject: draft.subject,
+        email_draft_body: draft.body,
+        email_to: draft.to
+      }).eq('id', lead.id)
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId(`send_email:${lead.id}`).setLabel('📤 Send Email').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`discard_email:${lead.id}`).setLabel('🗑️ Discard').setStyle(ButtonStyle.Danger)
+      )
+
+      await statusMsg.edit({
+        embeds: [new EmbedBuilder()
+          .setColor(0xff4d30)
+          .setTitle(`✉️ Email Draft — ${lead.business_name}`)
+          .addFields(
+            { name: '📬 To', value: draft.to || '_No email found — add manually_' },
+            { name: '📝 Subject', value: draft.subject },
+            { name: '💬 Body', value: `\`\`\`${draft.body}\`\`\`` }
+          )
+          .setFooter({ text: 'Approve to send · Discard to cancel' })
+        ],
+        components: [row]
+      })
+    } catch (e: any) {
+      await statusMsg.edit({
+        embeds: [new EmbedBuilder()
+          .setColor(Colors.Red)
+          .setTitle('❌ Draft failed')
+          .setDescription(e.message)
+        ]
+      })
+    }
+    return
+  }
+
   // Shortcut: detect show_leads intent directly without LLM
   const showLeadsIntent = /\b(show|list|what|see|display|how many).*(lead|client|prospect)/i.test(userText)
     || /\b(lead|client|prospect).*(show|list|what|see|display|how many)/i.test(userText)
@@ -98,6 +270,106 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
     await message.reply({ embeds: [embed] })
     return
+  }
+
+  // Bulk search: "ao find restaurants in Colombo 3, Kandy, Galle"
+  const bulkMatch = userText.match(/find\s+(.+?)\s+in\s+(.+)/i)
+  if (bulkMatch) {
+    const niche = bulkMatch[1].trim()
+    const locationsPart = bulkMatch[2].trim()
+    const locations = locationsPart.split(',').map(l => l.trim()).filter(Boolean)
+
+    if (locations.length > 1) {
+      const statusMsg = await message.reply({
+        embeds: [new EmbedBuilder()
+          .setColor(0xff4d30)
+          .setTitle(`🔍 Bulk Search — ${locations.length} locations`)
+          .setDescription(`Searching for **${niche}** in: ${locations.map(l => `**${l}**`).join(', ')}\n\nThis will take a few minutes...`)
+        ]
+      })
+
+      let totalFound = 0
+      let totalSaved = 0
+
+      for (let i = 0; i < locations.length; i++) {
+        const loc = locations[i]
+        await statusMsg.edit({
+          embeds: [new EmbedBuilder()
+            .setColor(0xff4d30)
+            .setTitle(`🔍 Searching ${i + 1}/${locations.length}`)
+            .setDescription(`Currently scanning **${niche}** in **${loc}**...`)
+          ]
+        })
+
+        try {
+          const result = await runLeadEngine(niche, loc, 10, async (progress) => {
+            await statusMsg.edit({
+              embeds: [new EmbedBuilder()
+                .setColor(0xff4d30)
+                .setTitle(`🔍 ${i + 1}/${locations.length} — ${loc}`)
+                .setDescription(`\`${progress}\``)
+              ]
+            })
+          })
+
+          totalFound += result.found
+          totalSaved += result.saved.length
+
+          const forumId = process.env.DISCORD_LEADS_FORUM_ID
+          const forum = forumId ? await client.channels.fetch(forumId).catch(() => null) : null
+
+          for (const lead of result.saved.slice(0, 10)) {
+            const scoreColor = lead.score >= 70 ? Colors.Green : lead.score >= 45 ? Colors.Yellow : Colors.Orange
+            const scoreEmoji = lead.score >= 70 ? '🟢' : lead.score >= 45 ? '🟡' : '🟠'
+            const embed = new EmbedBuilder()
+              .setColor(scoreColor)
+              .setTitle(lead.business_name)
+              .setURL(lead.google_maps_url ?? '')
+              .addFields(
+                { name: '📍 Location', value: lead.location, inline: true },
+                { name: '🏷️ Niche', value: lead.niche, inline: true },
+                { name: '⭐ Score', value: `**${lead.score}/100**`, inline: true },
+                { name: '📞 Phone', value: lead.phone ?? 'Not found', inline: true },
+                { name: '🌐 Website', value: lead.website ?? '❌ No website', inline: true },
+                { name: '🔍 Why this lead', value: lead.score_reasons.map((r: string) => `• ${r}`).join('\n') || 'No reasons' },
+                { name: '📉 Their gaps', value: lead.gap_analysis },
+                { name: '💬 Pitch angle', value: `*"${lead.pitch_angle}"*` }
+              )
+              .setFooter({ text: `Lead ID: ${lead.id}` })
+
+            const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder().setCustomId(`approve_lead:${lead.id}`).setLabel('✅ Approve').setStyle(ButtonStyle.Success),
+              new ButtonBuilder().setCustomId(`reject_lead:${lead.id}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger),
+              new ButtonBuilder().setCustomId(`later_lead:${lead.id}`).setLabel('⏳ Later').setStyle(ButtonStyle.Secondary)
+            )
+
+            if (forum && forum.type === ChannelType.GuildForum) {
+              const tagNames = [getNicheTagName(lead.niche)]
+              const isHot = !lead.website && (lead.google_rating ?? 0) >= 4.5
+              if (isHot) tagNames.push('Hot Lead')
+              const tagIds = getTagIds(forum as ForumChannel, ...tagNames)
+              const thread = await (forum as ForumChannel).threads.create({
+                name: `${scoreEmoji} ${lead.business_name} — ${lead.location}`,
+                appliedTags: tagIds,
+                message: { embeds: [embed], components: [row] }
+              })
+              await updateLeadStatus(lead.id!, 'found', thread.id)
+            }
+          }
+        } catch (e: any) {
+          console.error(`[Bulk] Error for ${loc}:`, e.message)
+        }
+      }
+
+      await statusMsg.edit({
+        embeds: [new EmbedBuilder()
+          .setColor(0xff4d30)
+          .setTitle(`✅ Bulk Search Complete`)
+          .setDescription(`Scanned **${totalFound}** businesses across **${locations.length}** locations.\n**${totalSaved}** leads posted to #leads forum.`)
+        ]
+      })
+      return
+    }
   }
 
   // Think
@@ -173,6 +445,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
             { name: '🏷️ Niche', value: lead.niche, inline: true },
             { name: '⭐ Score', value: `**${lead.score}/100**`, inline: true },
             { name: '📞 Phone', value: lead.phone ?? 'Not found', inline: true },
+            { name: '📧 Email', value: (lead as any).email ?? 'Not found', inline: true },
             { name: '🌐 Website', value: lead.website ?? '❌ No website', inline: true },
             { name: '🔍 Why this lead', value: lead.score_reasons.map(r => `• ${r}`).join('\n') || 'No reasons' },
             { name: '📉 Their gaps', value: lead.gap_analysis },
@@ -187,9 +460,16 @@ client.on(Events.MessageCreate, async (message: Message) => {
         )
 
         if (forum && forum.type === ChannelType.GuildForum) {
+          // Build tag list: niche + hot if applicable
+          const tagNames = [getNicheTagName(lead.niche)]
+          const isHot = !lead.website && (lead.google_rating ?? 0) >= 4.5
+          if (isHot) tagNames.push('Hot Lead')
+          const tagIds = getTagIds(forum as ForumChannel, ...tagNames)
+
           // Post as forum thread
           const thread = await (forum as ForumChannel).threads.create({
             name: `${scoreEmoji} ${lead.business_name} — ${lead.location}`,
+            appliedTags: tagIds,
             message: { embeds: [embed], components: [row] }
           })
           await updateLeadStatus(lead.id!, 'found', thread.id)
@@ -249,11 +529,67 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
 // Button interactions (approve/reject leads)
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (interaction.isButton()) {
-    const [action] = interaction.customId.split(':')
-    if (['approve_lead', 'reject_lead', 'later_lead'].includes(action)) {
-      await handleApproval(interaction)
+  if (!interaction.isButton()) return
+  const [action, leadId] = interaction.customId.split(':')
+
+  if (['approve_lead', 'reject_lead', 'later_lead', 'send_email', 'discard_email'].includes(action)) {
+    await handleApproval(interaction)
+
+    // When Later is clicked, set a 3-day reminder
+    if (action === 'later_lead' && leadId) {
+      const remindAt = new Date(Date.now() + 3 * 86400000).toISOString()
+      await supabase.from('leads').update({ remind_at: remindAt }).eq('id', leadId)
     }
+  }
+
+  // Clear leads confirmation
+  if (action === 'confirm_clear_leads') {
+    await interaction.deferUpdate()
+
+    // Delete all forum threads first
+    const forumId = process.env.DISCORD_LEADS_FORUM_ID
+    let deletedThreads = 0
+    if (forumId) {
+      const forum = await client.channels.fetch(forumId).catch(() => null) as ForumChannel | null
+      if (forum?.type === ChannelType.GuildForum) {
+        // Fetch active threads
+        const active = await forum.threads.fetchActive()
+        for (const [, thread] of active.threads) {
+          await thread.delete().catch(() => null)
+          deletedThreads++
+        }
+        // Fetch archived threads
+        const archived = await forum.threads.fetchArchived()
+        for (const [, thread] of archived.threads) {
+          await thread.delete().catch(() => null)
+          deletedThreads++
+        }
+      }
+    }
+
+    // Wipe Supabase
+    await supabase.from('leads').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+
+    await interaction.message.edit({
+      embeds: [new EmbedBuilder()
+        .setColor(Colors.Green)
+        .setTitle('✅ All Cleared')
+        .setDescription(`Deleted **${deletedThreads}** forum threads and wiped all leads from the database.\n\nFresh start 🧹`)
+      ],
+      components: []
+    })
+  }
+
+  if (action === 'cancel_clear_leads') {
+    await interaction.deferUpdate()
+    await interaction.message.edit({
+      embeds: [new EmbedBuilder()
+        .setColor(Colors.Grey)
+        .setTitle('Cancelled')
+        .setDescription('No leads were deleted.')
+      ],
+      components: []
+    })
   }
 })
 

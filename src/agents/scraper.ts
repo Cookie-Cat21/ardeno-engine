@@ -1,10 +1,12 @@
 import puppeteer from 'puppeteer'
+import axios from 'axios'
 
 export interface RawBusiness {
   name: string
   place_id: string
   address: string
   phone?: string
+  email?: string
   website?: string
   rating?: number
   review_count?: number
@@ -72,17 +74,69 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
 
     console.log(`[Scraper] Found ${results.length} businesses on Google Maps`)
 
-    const businesses: RawBusiness[] = results.map((r: any, i: number) => ({
-      name: r.name,
-      place_id: `gmaps-${i}-${r.name.replace(/\s+/g, '-').toLowerCase()}`,
-      address: r.address || location,
-      phone: undefined,
-      website: undefined,
-      rating: r.rating,
-      review_count: r.review_count,
-      google_maps_url: r.href || `https://www.google.com/maps/search/${encodeURIComponent(r.name + ' ' + location)}`,
-      types: [niche]
-    }))
+    const businesses: RawBusiness[] = []
+
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]
+      let phone: string | undefined
+      let website: string | undefined
+
+      try {
+        // Click into each business to get phone + website
+        await page.goto(r.href, { waitUntil: 'domcontentloaded', timeout: 15000 })
+        await sleep(2000)
+
+        const details = await page.evaluate(() => {
+          let phone: string | undefined
+          let website: string | undefined
+
+          // Phone number
+          const phoneEl = document.querySelector('button[data-tooltip="Copy phone number"] div')
+            ?? document.querySelector('[data-item-id^="phone"] div')
+            ?? Array.from(document.querySelectorAll('button[aria-label*="phone"]'))[0]
+          if (phoneEl) phone = phoneEl.textContent?.trim()
+
+          // Phone fallback — look for tel: links
+          if (!phone) {
+            const telLink = document.querySelector('a[href^="tel:"]') as HTMLAnchorElement | null
+            if (telLink) phone = telLink.href.replace('tel:', '')
+          }
+
+          // Website
+          const webEl = document.querySelector('a[data-item-id="authority"]') as HTMLAnchorElement | null
+            ?? document.querySelector('a[aria-label*="website"]') as HTMLAnchorElement | null
+          if (webEl) website = webEl.href
+
+          return { phone, website }
+        })
+
+        phone = details.phone
+        website = details.website
+      } catch {
+        // Non-critical — continue without these details
+      }
+
+      // Scrape email from website
+      let email: string | undefined
+      if (website) {
+        email = await scrapeEmailFromWebsite(website)
+      }
+
+      businesses.push({
+        name: r.name,
+        place_id: `gmaps-${i}-${r.name.replace(/\s+/g, '-').toLowerCase()}`,
+        address: r.address || location,
+        phone,
+        email,
+        website,
+        rating: r.rating,
+        review_count: r.review_count,
+        google_maps_url: r.href || `https://www.google.com/maps/search/${encodeURIComponent(r.name + ' ' + location)}`,
+        types: [niche]
+      })
+
+      console.log(`[Scraper] ${r.name} — phone: ${phone ?? 'none'}, website: ${website ?? 'none'}`)
+    }
 
     return businesses
   } finally {
@@ -110,6 +164,41 @@ export async function auditWebsite(url: string): Promise<{
   if (!url) return { hasWebsite: false, isMobileFriendly: false, hasSSL: false, quality: 'none' }
   const hasSSL = url.startsWith('https')
   return { hasWebsite: true, isMobileFriendly: false, hasSSL, quality: hasSSL ? 'average' : 'poor' }
+}
+
+// Scrape a business website for contact email
+export async function scrapeEmailFromWebsite(url: string): Promise<string | undefined> {
+  if (!url) return undefined
+  try {
+    const res = await axios.get(url, {
+      timeout: 8000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      maxRedirects: 3
+    })
+    const html = res.data as string
+
+    // Find mailto: links first (most reliable)
+    const mailtoMatch = html.match(/mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/i)
+    if (mailtoMatch) return mailtoMatch[1]
+
+    // Fallback: find raw email patterns in HTML
+    const emailMatch = html.match(/\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b/g)
+    if (emailMatch) {
+      // Filter out common false positives
+      const filtered = emailMatch.filter(e =>
+        !e.includes('example.com') &&
+        !e.includes('sentry.io') &&
+        !e.includes('w3.org') &&
+        !e.includes('schema.org') &&
+        !e.includes('.png') &&
+        !e.includes('.jpg')
+      )
+      return filtered[0]
+    }
+  } catch {
+    // Non-critical
+  }
+  return undefined
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))

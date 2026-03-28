@@ -7,7 +7,7 @@ export const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 )
 
-export type LeadStatus = 'found' | 'approved' | 'rejected' | 'emailed' | 'responded' | 'converted'
+export type LeadStatus = 'found' | 'approved' | 'rejected' | 'contacted' | 'emailed' | 'responded' | 'converted'
 
 export interface Lead {
   id?: string
@@ -59,6 +59,17 @@ export async function getLeadByMessageId(messageId: string): Promise<Lead | null
     .from('leads')
     .select('*')
     .eq('discord_message_id', messageId)
+    .single()
+
+  if (error) return null
+  return data
+}
+
+export async function getLeadById(id: string): Promise<Lead | null> {
+  const { data, error } = await supabase
+    .from('leads')
+    .select('*')
+    .eq('id', id)
     .single()
 
   if (error) return null
