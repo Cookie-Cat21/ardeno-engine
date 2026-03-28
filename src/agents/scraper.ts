@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer'
 import axios from 'axios'
+import { getBrowserConfig } from '../utils/browser'
 
 export interface RawBusiness {
   name: string
