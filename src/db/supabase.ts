@@ -39,6 +39,27 @@ export interface Lead {
   created_at?: string
 }
 
+/**
+ * Find a lead by phone number. Handles format differences:
+ * WhatsApp sends 94771234567, stored as "077 123 4567" or "0771234567" etc.
+ * We strip everything to the last 9 digits and match loosely.
+ */
+export async function findLeadByPhone(waPhone: string): Promise<Lead | null> {
+  // waPhone is like "94771234567" — get last 9 digits (core number without country code)
+  const digits = waPhone.replace(/\D/g, '')
+  const core = digits.length >= 9 ? digits.slice(-9) : digits  // e.g. "771234567"
+
+  const { data } = await supabase
+    .from('leads')
+    .select('*')
+    .ilike('phone', `%${core}%`)
+    .not('discord_message_id', 'is', null)  // only leads with a Discord thread
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  return data?.[0] ?? null
+}
+
 export async function isDuplicate(businessName: string, location: string): Promise<boolean> {
   const { data } = await supabase
     .from('leads')
