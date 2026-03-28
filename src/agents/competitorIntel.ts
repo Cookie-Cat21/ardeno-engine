@@ -10,7 +10,8 @@ import {
 } from 'discord.js'
 import type { Competitor } from '../config/competitors'
 import { ARDENO_POSITIONING } from '../config/competitors'
-import { getCompetitorThread, upsertCompetitorThread } from '../db/supabase'
+import { getCompetitorThread, upsertCompetitorThread, getCompetitorSnapshot, updateCompetitorSnapshot } from '../db/supabase'
+import { trackInstagram, trackWebsiteChanges, buildInstagramEmbed, buildChangesEmbed } from './competitorTracking'
 
 let _groq: Groq | null = null
 const getGroq = () => _groq ??= new Groq({ apiKey: process.env.GROQ_API_KEY! })
