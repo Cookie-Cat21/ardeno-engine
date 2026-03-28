@@ -15,9 +15,8 @@ export interface LighthouseScores {
  */
 export async function getLighthouseScores(url: string): Promise<LighthouseScores | null> {
   try {
-    // No API key — PageSpeed Insights works free without one (400 req/day, plenty for our use)
-    // Using a Maps-restricted key causes 403, so we skip it entirely
-    console.log(`[Lighthouse] Checking ${url}`)
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY ?? process.env.PAGESPEED_API_KEY
+    console.log(`[Lighthouse] Checking ${url} (key: ${apiKey ? '✅' : '❌ no key — enable PageSpeed Insights API in Google Cloud Console'})`)
 
     const base = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed'
     const query = [
@@ -27,6 +26,7 @@ export async function getLighthouseScores(url: string): Promise<LighthouseScores
       'category=accessibility',
       'category=best-practices',
       'category=seo',
+      ...(apiKey ? [`key=${apiKey}`] : [])
     ].join('&')
 
     const res = await axios.get(`${base}?${query}`, { timeout: 20000 })

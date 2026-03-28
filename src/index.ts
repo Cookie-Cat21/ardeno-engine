@@ -95,7 +95,7 @@ client.once(Events.ClientReady, async (c) => {
         totalSaved += result.saved.length
 
         // Post leads to forum
-        for (const lead of result.saved.slice(0, 10)) {
+        for (const [leadIdx, lead] of result.saved.slice(0, 10).entries()) {
           const scoreColor = lead.score >= 70 ? Colors.Green : lead.score >= 45 ? Colors.Yellow : Colors.Orange
           const scoreEmoji = lead.score >= 70 ? '🟢' : lead.score >= 45 ? '🟡' : '🟠'
 
@@ -140,8 +140,8 @@ client.once(Events.ClientReady, async (c) => {
             })
             await updateLeadStatus(lead.id!, 'found', thread.id)
 
-            // Website audit — runs async, posts as follow-up in thread
-            if (lead.website) runWebsiteAudit(lead.website, lead.lighthouse_scores, thread)
+            // Website audit — staggered 8s apart so Gemini Vision rate limit isn't hit
+            if (lead.website) runWebsiteAudit(lead.website, lead.lighthouse_scores, thread, leadIdx * 8000)
 
             // 🔥 Hot lead ping — score >= 80 means this one's worth dropping everything for
             if (isHot) {
@@ -504,7 +504,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
           const forumId = process.env.DISCORD_LEADS_FORUM_ID
           const forum = forumId ? await client.channels.fetch(forumId).catch(() => null) : null
 
-          for (const lead of result.saved.slice(0, 10)) {
+          for (const [leadIdx, lead] of result.saved.slice(0, 10).entries()) {
             const scoreColor = lead.score >= 70 ? Colors.Green : lead.score >= 45 ? Colors.Yellow : Colors.Orange
             const scoreEmoji = lead.score >= 70 ? '🟢' : lead.score >= 45 ? '🟡' : '🟠'
             const lhField = lead.lighthouse_scores
@@ -546,8 +546,8 @@ client.on(Events.MessageCreate, async (message: Message) => {
               })
               await updateLeadStatus(lead.id!, 'found', thread.id)
 
-              // Website audit — runs async, posts as follow-up in thread
-              if (lead.website) runWebsiteAudit(lead.website, lead.lighthouse_scores, thread)
+              // Website audit — staggered 8s apart so Gemini Vision rate limit isn't hit
+              if (lead.website) runWebsiteAudit(lead.website, lead.lighthouse_scores, thread, leadIdx * 8000)
 
               // 🔥 Hot lead ping
               if (isHot) {
@@ -647,7 +647,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
       const forumId = process.env.DISCORD_LEADS_FORUM_ID
       const forum = forumId ? await client.channels.fetch(forumId).catch(() => null) : null
 
-      for (const lead of result.saved.slice(0, 10)) {
+      for (const [leadIdx, lead] of result.saved.slice(0, 10).entries()) {
         const scoreColor = lead.score >= 70 ? Colors.Green : lead.score >= 45 ? Colors.Yellow : Colors.Orange
         const scoreEmoji = lead.score >= 70 ? '🟢' : lead.score >= 45 ? '🟡' : '🟠'
         const lhField = lead.lighthouse_scores
@@ -694,8 +694,8 @@ client.on(Events.MessageCreate, async (message: Message) => {
           })
           await updateLeadStatus(lead.id!, 'found', thread.id)
 
-          // Website audit — runs async, posts as follow-up in thread
-          if (lead.website) runWebsiteAudit(lead.website, lead.lighthouse_scores, thread)
+          // Website audit — staggered 8s apart so Gemini Vision rate limit isn't hit
+          if (lead.website) runWebsiteAudit(lead.website, lead.lighthouse_scores, thread, leadIdx * 8000)
 
           // 🔥 Hot lead ping
           if (isHot) {
@@ -882,9 +882,17 @@ function lhBadge(score: number | undefined | null): string {
 function runWebsiteAudit(
   website: string,
   lighthouse: any,
-  thread: { send: (opts: any) => Promise<any> }
+  thread: { send: (opts: any) => Promise<any> },
+  delayMs = 0
 ): void {
-  analyzeWebsite(website, lighthouse)
+  console.log(`[AuditEmbed] lighthouse data for ${website}:`, JSON.stringify(lighthouse))
+
+  const doAudit = async () => {
+    if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs))
+    return analyzeWebsite(website, lighthouse)
+  }
+
+  doAudit()
     .then(async (result) => {
       if (!result) return
       const { audit, screenshot } = result
@@ -917,7 +925,7 @@ function runWebsiteAudit(
         msgOptions.files = [attachment]
       }
 
-      embed.setFooter({ text: `${website} · ${screenshot ? 'Gemini Vision' : 'HTML Analysis'}` })
+      embed.setFooter({ text: `${website} · Ardeno OS` })
 
       await thread.send(msgOptions)
     })

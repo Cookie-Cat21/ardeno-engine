@@ -51,23 +51,24 @@ export async function analyzeWebsite(
       return null
     }
 
-    if (screenshot) {
-      console.log(`[WebsiteAnalyzer] Running Gemini Vision analysis...`)
-      const audit = await analyzeWithVision(url, html, screenshot, lighthouse)
-      if (audit) {
-        console.log(`[WebsiteAnalyzer] ✅ Vision analysis complete`)
-        return { audit, screenshot }
-      }
-      console.log(`[WebsiteAnalyzer] Vision failed — falling back to Groq text`)
-    }
-
-    // Fallback: text-only via Groq
+    // Primary: Groq text analysis using HTML content
     if (html) {
       console.log(`[WebsiteAnalyzer] Running Groq text analysis...`)
       const audit = await analyzeWithText(url, html, lighthouse)
       if (audit) {
-        console.log(`[WebsiteAnalyzer] ✅ Text analysis complete`)
-        return { audit, screenshot: null }
+        console.log(`[WebsiteAnalyzer] ✅ Analysis complete${screenshot ? ' + screenshot captured' : ''}`)
+        return { audit, screenshot: screenshot ?? null }
+      }
+    }
+
+    // Fallback: screenshot captured but HTML blocked (e.g. Squarespace bot protection)
+    // Still post the screenshot with a URL-only audit so the team can see the site
+    if (screenshot) {
+      console.log(`[WebsiteAnalyzer] HTML unavailable — running URL-only audit with screenshot`)
+      const audit = await analyzeUrlOnly(url, lighthouse)
+      if (audit) {
+        console.log(`[WebsiteAnalyzer] ✅ URL-only audit complete + screenshot captured`)
+        return { audit, screenshot }
       }
     }
 
@@ -248,6 +249,50 @@ Return ONLY valid JSON, no markdown:
   "quickWins": ["<specific improvements with clear ROI for this business type>"],
   "workingWell": ["<what the HTML confirms is good — booking system, social links, clear content, etc>"],
   "ourAngle": "<1 sentence: most compelling sales argument based on what the data actually shows>"
+}`
+      }]
+    })
+
+    return parseAudit(completion.choices[0].message.content ?? '{}')
+  } catch {
+    return null
+  }
+}
+
+// ─── URL-only audit (when HTML is blocked but screenshot succeeded) ─────────────
+
+async function analyzeUrlOnly(
+  url: string,
+  lighthouse?: LighthouseScores | null
+): Promise<WebsiteAudit | null> {
+  try {
+    const isHttp = url.startsWith('http://')
+    const domain = new URL(url).hostname
+    const lhContext = lighthouse
+      ? `Lighthouse scores — Performance: ${lighthouse.performance}/100, SEO: ${lighthouse.seo}/100, Accessibility: ${lighthouse.accessibility}/100, Best Practices: ${lighthouse.bestPractices}/100`
+      : 'Lighthouse scores: unavailable'
+
+    const completion = await getGroq().chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.3,
+      messages: [{
+        role: 'user',
+        content: `You are a senior web designer at Ardeno Studio. You are analyzing a potential client's website but could not access the HTML (bot protection). You have the URL and Lighthouse scores only.
+
+Website: ${url}
+Domain: ${domain}
+HTTPS: ${isHttp ? '❌ No — running on HTTP' : '✅ Yes'}
+${lhContext}
+
+Based on the Lighthouse scores and URL alone, give a realistic audit. Be honest that you couldn't access the full HTML. Focus on what the Lighthouse data tells you.
+
+Return ONLY valid JSON, no markdown:
+{
+  "firstImpression": "<based on domain name and HTTPS status — what kind of site is this likely to be>",
+  "criticalIssues": ["<issues confirmed by Lighthouse or HTTPS check only — don't guess>"],
+  "quickWins": ["<improvements suggested by the Lighthouse scores — e.g. if performance is low, page speed work>"],
+  "workingWell": ["<what Lighthouse confirms is good, e.g. high SEO score>"],
+  "ourAngle": "<1 sentence sales angle based on what we know from the data>"
 }`
       }]
     })
