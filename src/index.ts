@@ -485,9 +485,9 @@ client.on(Events.MessageCreate, async (message: Message) => {
     const cityMatch = userText.match(/(?:mega hunt|full scan|full hunt)\s+([A-Za-z]+)/i)
     const city = cityMatch ? cityMatch[1].trim() : 'Colombo'
 
-    const forumId   = process.env.DISCORD_LEADS_FORUM_ID
-    const forum     = forumId ? await client.channels.fetch(forumId).catch(() => null) : null
-    const tagCache  = forumId ? await getTagIds(forumId) : {}
+    const forumId = process.env.DISCORD_LEADS_FORUM_ID
+    const forum   = forumId ? await client.channels.fetch(forumId).catch(() => null) : null
+    const general = message.channel as any
 
     await message.reply({
       embeds: [new EmbedBuilder()
