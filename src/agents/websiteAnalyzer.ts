@@ -1,5 +1,6 @@
 import axios from 'axios'
 import puppeteer from 'puppeteer'
+import { getBrowserConfig } from '../utils/browser'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import Groq from 'groq-sdk'
 import type { LighthouseScores } from './lighthouse'
