@@ -305,8 +305,22 @@ export async function rescanMissingLeads(
     return p
   }
 
+  // Helper — accept Google cookie consent once per browser session
+  const acceptGoogleConsent = async (p: any) => {
+    try {
+      await p.goto('https://www.google.com', { waitUntil: 'domcontentloaded', timeout: 10000 })
+      await p.evaluate(() => {
+        const btn = Array.from(document.querySelectorAll('button'))
+          .find(b => /accept all|i agree|agree|accept/i.test(b.textContent ?? ''))
+        if (btn) (btn as HTMLElement).click()
+      })
+      await new Promise(r => setTimeout(r, 1000))
+    } catch {}
+  }
+
   let browser = await newBrowser()
   let page    = await newPage(browser)
+  await acceptGoogleConsent(page)
 
   try {
     for (let i = 0; i < toScan.length; i++) {
