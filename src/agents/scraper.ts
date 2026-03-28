@@ -226,11 +226,12 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
         phone = details.phone
         website = details.website
 
-        // If Maps page had no website, fall back to a Google search
-        if (!website) {
-          console.log(`[Scraper] No website on Maps for ${r.name} — trying Google search fallback`)
-          website = await googleSearchForWebsite(r.name, location, page)
-          if (website) console.log(`[Scraper] 🌐 Found via Google search: ${website}`)
+        // If Maps page is missing phone or website, fall back to a Google search
+        if (!phone || !website) {
+          console.log(`[Scraper] Missing details for ${r.name} — trying Google search fallback`)
+          const googleDetails = await googleSearchForDetails(r.name, location, page)
+          if (!phone && googleDetails.phone)     { phone   = googleDetails.phone;   console.log(`[Scraper] 📞 Found phone via Google: ${phone}`) }
+          if (!website && googleDetails.website) { website = googleDetails.website; console.log(`[Scraper] 🌐 Found website via Google: ${website}`) }
         }
       } catch {
         // Non-critical — continue without these details
