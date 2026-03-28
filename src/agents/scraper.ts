@@ -171,9 +171,18 @@ export async function auditWebsite(url: string): Promise<{
   return { hasWebsite: true, isMobileFriendly: false, hasSSL, quality: hasSSL ? 'average' : 'poor' }
 }
 
-// Scrape a business website for contact email
-export async function scrapeEmailFromWebsite(url: string): Promise<string | undefined> {
-  if (!url) return undefined
+const SOCIAL_PATTERNS: { regex: RegExp }[] = [
+  { regex: /https?:\/\/(www\.)?instagram\.com\/[a-zA-Z0-9._]+/g },
+  { regex: /https?:\/\/(www\.)?facebook\.com\/[a-zA-Z0-9._%\-]+/g },
+  { regex: /https?:\/\/(www\.)?tiktok\.com\/@?[a-zA-Z0-9._]+/g },
+  { regex: /https?:\/\/(www\.)?(twitter|x)\.com\/[a-zA-Z0-9_]+/g },
+  { regex: /https?:\/\/(www\.)?linkedin\.com\/company\/[a-zA-Z0-9._-]+/g },
+  { regex: /https?:\/\/(www\.)?youtube\.com\/(channel|c|@)[a-zA-Z0-9._-]+/g },
+]
+
+// Scrape a business website for email + social links in one fetch
+export async function scrapeContactInfo(url: string): Promise<{ email?: string; socials: string[] }> {
+  if (!url) return { socials: [] }
   try {
     const res = await axios.get(url, {
       timeout: 8000,
@@ -182,28 +191,47 @@ export async function scrapeEmailFromWebsite(url: string): Promise<string | unde
     })
     const html = res.data as string
 
-    // Find mailto: links first (most reliable)
+    // Email: mailto links first, then raw pattern
+    let email: string | undefined
     const mailtoMatch = html.match(/mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/i)
-    if (mailtoMatch) return mailtoMatch[1]
-
-    // Fallback: find raw email patterns in HTML
-    const emailMatch = html.match(/\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b/g)
-    if (emailMatch) {
-      // Filter out common false positives
-      const filtered = emailMatch.filter(e =>
-        !e.includes('example.com') &&
-        !e.includes('sentry.io') &&
-        !e.includes('w3.org') &&
-        !e.includes('schema.org') &&
-        !e.includes('.png') &&
-        !e.includes('.jpg')
-      )
-      return filtered[0]
+    if (mailtoMatch) {
+      email = mailtoMatch[1]
+    } else {
+      const emailMatch = html.match(/\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b/g)
+      if (emailMatch) {
+        const filtered = emailMatch.filter(e =>
+          !e.includes('example.com') && !e.includes('sentry.io') &&
+          !e.includes('w3.org') && !e.includes('schema.org') &&
+          !e.includes('.png') && !e.includes('.jpg')
+        )
+        email = filtered[0]
+      }
     }
+
+    // Socials: extract unique URLs per platform
+    const socials: string[] = []
+    const seen = new Set<string>()
+    for (const { regex } of SOCIAL_PATTERNS) {
+      const matches = html.match(regex) ?? []
+      for (const match of matches) {
+        const clean = match.toLowerCase().replace(/\/$/, '')
+        if (!seen.has(clean)) {
+          seen.add(clean)
+          socials.push(match.replace(/\/$/, ''))
+        }
+      }
+    }
+
+    return { email, socials }
   } catch {
-    // Non-critical
+    return { socials: [] }
   }
-  return undefined
+}
+
+// Keep old export name for any remaining references
+export async function scrapeEmailFromWebsite(url: string): Promise<string | undefined> {
+  const { email } = await scrapeContactInfo(url)
+  return email
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
