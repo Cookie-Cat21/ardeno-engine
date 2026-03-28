@@ -234,44 +234,41 @@ const SOCIAL_PATTERNS: { regex: RegExp }[] = [
   { regex: /https?:\/\/(www\.)?youtube\.com\/(channel|c|@)[a-zA-Z0-9._-]+/g },
 ]
 
-// Scrape a business website for email + social links in one fetch
+// Scrape a business website for email + social links
+// Checks homepage first, then hunts for a contact page if no email found
 export async function scrapeContactInfo(url: string): Promise<{ email?: string; socials: string[] }> {
   if (!url) return { socials: [] }
-  try {
-    const res = await axios.get(url, {
-      timeout: 8000,
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      maxRedirects: 3
-    })
-    const html = res.data as string
 
-    // Email: mailto links first, then raw pattern
-    let email: string | undefined
-    const mailtoMatch = html.match(/mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/i)
-    if (mailtoMatch) {
-      email = mailtoMatch[1]
-    } else {
-      const emailMatch = html.match(/\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b/g)
-      if (emailMatch) {
-        const filtered = emailMatch.filter(e =>
-          !e.includes('example.com') && !e.includes('sentry.io') &&
-          !e.includes('w3.org') && !e.includes('schema.org') &&
-          !e.includes('.png') && !e.includes('.jpg')
-        )
-        email = filtered[0]
+  try {
+    const homepage = await fetchHtml(url)
+    if (!homepage) return { socials: [] }
+
+    const socials  = extractSocials(homepage)
+    let   email    = extractEmail(homepage)
+
+    // If no email on homepage, try to find a contact/about page
+    if (!email) {
+      const contactUrl = findContactPageUrl(url, homepage)
+      if (contactUrl) {
+        console.log(`[Scraper] No email on homepage — checking contact page: ${contactUrl}`)
+        const contactHtml = await fetchHtml(contactUrl)
+        if (contactHtml) email = extractEmail(contactHtml)
       }
     }
 
-    // Socials: extract unique URLs per platform
-    const socials: string[] = []
-    const seen = new Set<string>()
-    for (const { regex } of SOCIAL_PATTERNS) {
-      const matches = html.match(regex) ?? []
-      for (const match of matches) {
-        const clean = match.toLowerCase().replace(/\/$/, '')
-        if (!seen.has(clean)) {
-          seen.add(clean)
-          socials.push(match.replace(/\/$/, ''))
+    // Last resort: try common contact URL patterns
+    if (!email) {
+      const base = new URL(url).origin
+      for (const path of ['/contact', '/contact-us', '/contacts', '/reach-us', '/get-in-touch', '/about']) {
+        const tryUrl = base + path
+        if (tryUrl === url) continue  // already checked
+        const html = await fetchHtml(tryUrl)
+        if (html) {
+          email = extractEmail(html)
+          if (email) {
+            console.log(`[Scraper] Found email on ${path}: ${email}`)
+            break
+          }
         }
       }
     }
@@ -280,6 +277,89 @@ export async function scrapeContactInfo(url: string): Promise<{ email?: string; 
   } catch {
     return { socials: [] }
   }
+}
+
+async function fetchHtml(url: string): Promise<string | null> {
+  try {
+    const res = await axios.get(url, {
+      timeout: 8000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      maxRedirects: 3
+    })
+    return res.data as string
+  } catch {
+    return null
+  }
+}
+
+function extractEmail(html: string): string | undefined {
+  // Priority 1: mailto links (most reliable)
+  const mailtoMatch = html.match(/mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/i)
+  if (mailtoMatch) return mailtoMatch[1].toLowerCase()
+
+  // Priority 2: raw email pattern in HTML
+  const emailMatches = html.match(/\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b/g)
+  if (!emailMatches) return undefined
+
+  const JUNK_DOMAINS = [
+    'example.com', 'sentry.io', 'w3.org', 'schema.org',
+    'wixpress.com', 'squarespace.com', 'wordpress.com',
+    'jquery.com', 'bootstrapcdn.com', 'cloudflare.com',
+    'google.com', 'facebook.com', 'instagram.com',
+    'amazonaws.com', 'fontawesome.com', 'gravatar.com'
+  ]
+  const JUNK_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.woff', '.ttf']
+
+  const filtered = emailMatches.filter(e => {
+    const lower = e.toLowerCase()
+    if (JUNK_EXTENSIONS.some(ext => lower.includes(ext))) return false
+    if (JUNK_DOMAINS.some(d => lower.endsWith(d)))        return false
+    if (lower.includes('noreply') || lower.includes('no-reply')) return false
+    if (lower.startsWith('support@') && lower.includes('wix'))   return false
+    return true
+  })
+
+  return filtered[0]?.toLowerCase()
+}
+
+function findContactPageUrl(baseUrl: string, html: string): string | null {
+  try {
+    const base   = new URL(baseUrl).origin
+    // Look for links that say "contact", "reach", "get in touch"
+    const matches = [...html.matchAll(/href=["']([^"']+)["'][^>]*>([^<]{0,50})/gi)]
+    for (const m of matches) {
+      const href = m[1]
+      const text = m[2].toLowerCase()
+      if (/(contact|reach us|get in touch|enquir|email us)/i.test(text)) {
+        if (href.startsWith('http')) return href
+        if (href.startsWith('/'))    return base + href
+      }
+    }
+    // Also look for hrefs that contain "contact" in the path
+    const hrefMatches = [...html.matchAll(/href=["']([^"']*contact[^"']*)["']/gi)]
+    if (hrefMatches.length > 0) {
+      const href = hrefMatches[0][1]
+      if (href.startsWith('http')) return href
+      if (href.startsWith('/'))    return new URL(baseUrl).origin + href
+    }
+  } catch {}
+  return null
+}
+
+function extractSocials(html: string): string[] {
+  const socials: string[] = []
+  const seen = new Set<string>()
+  for (const { regex } of SOCIAL_PATTERNS) {
+    const matches = html.match(regex) ?? []
+    for (const match of matches) {
+      const clean = match.toLowerCase().replace(/\/$/, '')
+      if (!seen.has(clean)) {
+        seen.add(clean)
+        socials.push(match.replace(/\/$/, ''))
+      }
+    }
+  }
+  return socials
 }
 
 // Keep old export name for any remaining references
