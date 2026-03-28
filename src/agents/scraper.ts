@@ -42,17 +42,16 @@ ${pageText.slice(0, 3000)}`
 }
 
 /**
- * Google search fallback — finds the official website for a business
- * when Google Maps doesn't list one.
- * Searches Google, dumps the results text, and asks Groq to identify the URL.
+ * Google search fallback — searches for a business and extracts BOTH
+ * phone number and website from the knowledge panel / search results.
  */
-async function googleSearchForWebsite(
+async function googleSearchForDetails(
   businessName: string,
   location: string,
   page: any
-): Promise<string | undefined> {
+): Promise<{ phone?: string; website?: string }> {
   try {
-    const query = encodeURIComponent(`"${businessName}" ${location} official website`)
+    const query = encodeURIComponent(`${businessName} ${location}`)
     await page.goto(`https://www.google.com/search?q=${query}`, {
       waitUntil: 'domcontentloaded',
       timeout: 15000
@@ -65,15 +64,24 @@ async function googleSearchForWebsite(
       if (btn) (btn as HTMLElement).click()
     }).catch(() => {})
 
-    await page.waitForSelector('#search', { timeout: 6000 }).catch(() => {})
+    await page.waitForSelector('body', { timeout: 6000 }).catch(() => {})
 
-    // Pull visible text + all href links from search results
+    // Pull full page text + non-Google links (for website detection)
     const searchData = await page.evaluate(() => {
-      const text = document.body.innerText.slice(0, 3000)
-      const links = Array.from(document.querySelectorAll('#search a[href]'))
+      const text = document.body.innerText.slice(0, 4000)
+      const links = Array.from(document.querySelectorAll('a[href]'))
         .map(a => (a as HTMLAnchorElement).href)
-        .filter(h => h.startsWith('http') && !h.includes('google.com') && !h.includes('maps.google'))
-        .slice(0, 15)
+        .filter(h =>
+          h.startsWith('http') &&
+          !h.includes('google.com') &&
+          !h.includes('maps.google') &&
+          !h.includes('facebook.com') &&
+          !h.includes('instagram.com') &&
+          !h.includes('tripadvisor') &&
+          !h.includes('yelp.com') &&
+          !h.includes('booking.com')
+        )
+        .slice(0, 20)
       return { text, links }
     })
 
@@ -81,30 +89,37 @@ async function googleSearchForWebsite(
       model: 'llama-3.3-70b-versatile',
       messages: [{
         role: 'user',
-        content: `I'm looking for the official website of "${businessName}" located in ${location}.
+        content: `Extract the phone number and official website for "${businessName}" in ${location} from this Google search page.
 
-Here are the top Google search result links:
+The knowledge panel on the right side of Google search results usually shows the phone number directly.
+
+Links found on the page:
 ${searchData.links.join('\n')}
 
-And the page text:
+Full page text:
 ${searchData.text}
 
 Rules:
-- Return ONLY the official business website URL (starts with http)
-- Must be their own domain — NOT facebook.com, instagram.com, tripadvisor.com, yelp.com, google.com, maps.google.com, booking.com, or any directory/review site
-- If no official website is clearly identifiable, return null
-- Return ONLY valid JSON: {"website": "https://example.com"} or {"website": null}`
+- phone: the business phone number (any format is fine, e.g. "076 557 3360")
+- website: their OWN domain only — NOT facebook, instagram, tripadvisor, yelp, booking, google, etc.
+- Use null if not found
+
+Return ONLY valid JSON:
+{"phone": "076 557 3360", "website": "https://example.com"}`
       }],
       temperature: 0,
-      max_tokens: 60
+      max_tokens: 80
     })
 
     const raw = res.choices[0].message.content?.trim() ?? '{}'
     const json = raw.match(/\{.*\}/s)?.[0] ?? '{}'
     const parsed = JSON.parse(json)
-    return parsed.website ?? undefined
+    return {
+      phone:   parsed.phone   ?? undefined,
+      website: parsed.website ?? undefined
+    }
   } catch {
-    return undefined
+    return {}
   }
 }
 
