@@ -179,6 +179,71 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
   }
 }
 
+/**
+ * Re-visits Google Maps pages for leads that are missing phone/website
+ * and fills them in using AI extraction.
+ */
+export async function rescanMissingLeads(
+  leads: Array<{ id: string; business_name: string; google_maps_url?: string; phone?: string; website?: string }>,
+  onProgress: (msg: string) => Promise<void>
+): Promise<{ updated: number; skipped: number }> {
+  const toScan = leads.filter(l => !l.phone || !l.website)
+  if (toScan.length === 0) return { updated: 0, skipped: 0 }
+
+  const browser = await puppeteer.launch(getBrowserConfig())
+  let updated = 0
+  let skipped = 0
+
+  try {
+    const page = await browser.newPage()
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36')
+
+    for (const lead of toScan) {
+      if (!lead.google_maps_url) { skipped++; continue }
+
+      await onProgress(`🔍 Rescanning **${lead.business_name}**...`)
+
+      try {
+        await page.goto(lead.google_maps_url, { waitUntil: 'domcontentloaded', timeout: 20000 })
+
+        // Dismiss cookie consent if on EU server
+        await page.evaluate(() => {
+          const btn = Array.from(document.querySelectorAll('button'))
+            .find(b => /accept all|i agree|agree|accept/i.test(b.textContent ?? ''))
+          if (btn) (btn as HTMLElement).click()
+        }).catch(() => {})
+
+        await page.waitForSelector('h1', { timeout: 8000 }).catch(() => {})
+
+        const pageText = await page.evaluate(() => document.body.innerText)
+        const details = await extractDetailsWithAI(pageText)
+
+        // Only update fields that were missing
+        const patch: Record<string, string> = {}
+        if (!lead.phone && details.phone)   patch.phone   = details.phone
+        if (!lead.website && details.website) patch.website = details.website
+
+        if (Object.keys(patch).length > 0) {
+          const { supabase } = await import('../db/supabase')
+          await supabase.from('leads').update(patch).eq('id', lead.id)
+          updated++
+          console.log(`[Rescan] ✅ ${lead.business_name} — ${JSON.stringify(patch)}`)
+        } else {
+          skipped++
+          console.log(`[Rescan] ⬜ ${lead.business_name} — nothing new found`)
+        }
+      } catch (e: any) {
+        console.log(`[Rescan] ❌ ${lead.business_name} — ${e.message}`)
+        skipped++
+      }
+    }
+  } finally {
+    await browser.close()
+  }
+
+  return { updated, skipped }
+}
+
 async function scrollResults(page: any, targetCount: number): Promise<void> {
   const PAUSE        = 1800   // ms to wait after each scroll for new cards to render
   const MAX_ATTEMPTS = 25     // hard cap — never scroll more than 25 times
