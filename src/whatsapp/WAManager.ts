@@ -169,19 +169,15 @@ export async function sendWhatsAppMessage(
 }
 
 function formatPhone(phone: string): string {
-  // Remove all non-digits
+  return normalizePhone(phone)
+}
+
+function normalizePhone(phone: string): string {
   let digits = phone.replace(/\D/g, '')
-
-  // Sri Lanka: if starts with 0, replace with 94
-  if (digits.startsWith('0')) {
-    digits = '94' + digits.slice(1)
-  }
-
-  // If no country code, assume Sri Lanka
-  if (!digits.startsWith('94') && digits.length === 9) {
-    digits = '94' + digits
-  }
-
+  // Sri Lanka: 0XX → 94XX
+  if (digits.startsWith('0')) digits = '94' + digits.slice(1)
+  // No country code + 9 digits → assume Sri Lanka
+  if (!digits.startsWith('94') && digits.length === 9) digits = '94' + digits
   return digits
 }
 
