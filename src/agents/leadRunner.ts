@@ -35,11 +35,26 @@ export async function runLeadEngine(
 
   onProgress?.(`Found ${businesses.length} businesses. Analysing with AI...`)
 
-  for (let i = 0; i < businesses.length; i++) {
-    const biz = businesses[i]
+  // Filter out chains and franchises before spending any API calls on them
+  const filtered = businesses.filter(biz => {
+    if (isChainOrFranchise(biz.name)) {
+      console.log(`[LeadRunner] Skipping chain/franchise: ${biz.name}`)
+      return false
+    }
+    return true
+  })
+
+  if (filtered.length < businesses.length) {
+    const skipped = businesses.length - filtered.length
+    console.log(`[LeadRunner] Filtered out ${skipped} chain(s)/franchise(s) — ${filtered.length} remaining`)
+    onProgress?.(`Filtered out ${skipped} chain(s) — analysing ${filtered.length} real leads...`)
+  }
+
+  for (let i = 0; i < filtered.length; i++) {
+    const biz = filtered[i]
 
     try {
-      onProgress?.(`[${i + 1}/${businesses.length}] Scoring: ${biz.name}`)
+      onProgress?.(`[${i + 1}/${filtered.length}] Scoring: ${biz.name}`)
 
       // Run Lighthouse audit if the business has a website (soft fail — never blocks)
       const lighthouseScores = biz.website
