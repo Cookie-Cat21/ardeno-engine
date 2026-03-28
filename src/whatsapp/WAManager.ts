@@ -8,6 +8,20 @@ import { TEAM, TeamMember } from '../config/team'
 const sessions: Map<string, WAClient> = new Map()
 const ready: Map<string, boolean> = new Map()
 
+// Reply handler — registered from index.ts after bot is ready
+export type WAReplyHandler = (params: {
+  discordId: string   // which founder's WhatsApp received the reply
+  senderPhone: string // normalized phone (digits only, e.g. 94771234567)
+  body: string        // message text
+  timestamp: Date
+}) => Promise<void>
+
+let _replyHandler: WAReplyHandler | null = null
+
+export function onWhatsAppReply(handler: WAReplyHandler): void {
+  _replyHandler = handler
+}
+
 export async function initWhatsApp(discordClient: DiscordClient): Promise<void> {
   for (const member of Object.values(TEAM)) {
     await initSession(member, discordClient)
