@@ -1,0 +1,20 @@
+2026/03/28-12:52:56.859 7190 Reusing MANIFEST C:\Users\Ovindu\Documents\Ardeno Studio\ardeno-engine\.wwebjs_auth\session-718874427865038849\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/03/28-12:52:56.859 7190 Recovering log #229
+2026/03/28-12:52:56.877 7190 Reusing old log C:\Users\Ovindu\Documents\Ardeno Studio\ardeno-engine\.wwebjs_auth\session-718874427865038849\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000229.log 
+2026/03/28-12:53:07.428 8780 Level-0 table #238: started
+2026/03/28-12:53:07.453 8780 Level-0 table #238: 1218588 bytes OK
+2026/03/28-12:53:07.454 8780 Delete type=0 #229
+2026/03/28-12:53:07.457 8780 Compacting 1@1 + 5@2 files
+2026/03/28-12:53:07.539 8780 Generated table #239@1: 75624 keys, 2222680 bytes
+2026/03/28-12:53:07.604 8780 Generated table #240@1: 61072 keys, 2238252 bytes
+2026/03/28-12:53:07.651 8780 Generated table #241@1: 35450 keys, 2196446 bytes
+2026/03/28-12:53:07.702 8780 Generated table #242@1: 29975 keys, 2204462 bytes
+2026/03/28-12:53:07.709 8780 Generated table #243@1: 7303 keys, 419216 bytes
+2026/03/28-12:53:07.709 8780 Compacted 1@1 + 5@2 files => 9281056 bytes
+2026/03/28-12:53:07.710 8780 compacted to: files[ 0 0 5 0 0 0 0 ]
+2026/03/28-12:53:07.711 8780 Delete type=2 #231
+2026/03/28-12:53:07.711 8780 Delete type=2 #232
+2026/03/28-12:53:07.711 8780 Delete type=2 #233
+2026/03/28-12:53:07.711 8780 Delete type=2 #234
+2026/03/28-12:53:07.711 8780 Delete type=2 #235
+2026/03/28-12:53:07.711 8780 Delete type=2 #238

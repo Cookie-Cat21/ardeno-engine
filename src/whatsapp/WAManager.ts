@@ -1,6 +1,6 @@
 import { Client as WAClient, LocalAuth, MessageMedia } from 'whatsapp-web.js'
-// @ts-ignore
-import qrcode from 'qrcode-terminal'
+import QRCode from 'qrcode'
+import { AttachmentBuilder } from 'discord.js'
 import { Client as DiscordClient } from 'discord.js'
 import { TEAM, TeamMember } from '../config/team'
 
@@ -25,18 +25,17 @@ async function initSession(member: TeamMember, discordClient: DiscordClient): Pr
 
   wa.on('qr', async (qr) => {
     console.log(`[WhatsApp] QR for ${member.name} — sending via Discord DM`)
-    qrcode.generate(qr, { small: true })
 
     try {
-      // DM the QR code to the team member
+      // Generate QR code as PNG image buffer
+      const qrBuffer = await QRCode.toBuffer(qr, { width: 400, margin: 2 })
+      const attachment = new AttachmentBuilder(qrBuffer, { name: 'whatsapp-qr.png' })
+
       const user = await discordClient.users.fetch(member.discordId)
-      await user.send(
-        `**Ardeno OS — WhatsApp Setup for ${member.name}**\n\n` +
-        `Scan this QR code with **your** WhatsApp to connect your account:\n\n` +
-        `\`\`\`${qr}\`\`\`\n\n` +
-        `Or go to **WhatsApp → Linked Devices → Link a Device** and scan.\n` +
-        `You only need to do this once.`
-      )
+      await user.send({
+        content: `**Ardeno OS — WhatsApp Setup for ${member.name}**\n\nScan this QR code with **your** WhatsApp:\n> WhatsApp → Linked Devices → Link a Device\n\nYou only need to do this once.`,
+        files: [attachment]
+      })
     } catch (e) {
       console.error(`[WhatsApp] Could not DM ${member.name}:`, e)
     }

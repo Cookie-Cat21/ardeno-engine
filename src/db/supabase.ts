@@ -9,6 +9,13 @@ export const supabase = createClient(
 
 export type LeadStatus = 'found' | 'approved' | 'rejected' | 'contacted' | 'emailed' | 'responded' | 'converted'
 
+export interface LighthouseScores {
+  performance: number
+  accessibility: number
+  bestPractices: number
+  seo: number
+}
+
 export interface Lead {
   id?: string
   business_name: string
@@ -26,12 +33,28 @@ export interface Lead {
   score_reasons: string[]
   gap_analysis: string
   pitch_angle: string
+  lighthouse_scores?: LighthouseScores | null
   status: LeadStatus
   discord_message_id?: string
   created_at?: string
 }
 
+export async function isDuplicate(businessName: string, location: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('leads')
+    .select('id')
+    .ilike('business_name', businessName.trim())
+    .ilike('location', `%${location.trim()}%`)
+    .limit(1)
+
+  return (data?.length ?? 0) > 0
+}
+
 export async function saveLead(lead: Lead): Promise<Lead> {
+  // De-duplicate before saving
+  const dupe = await isDuplicate(lead.business_name, lead.location)
+  if (dupe) throw new Error(`DUPLICATE: ${lead.business_name} already exists`)
+
   const { data, error } = await supabase
     .from('leads')
     .insert(lead)

@@ -1,0 +1,59 @@
+2026/03/28-12:53:00.512 690c Reusing MANIFEST C:\Users\Ovindu\Documents\Ardeno Studio\ardeno-engine\.wwebjs_auth\session-956204933974196315\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/03/28-12:53:00.513 690c Recovering log #2221
+2026/03/28-12:53:00.552 690c Reusing old log C:\Users\Ovindu\Documents\Ardeno Studio\ardeno-engine\.wwebjs_auth\session-956204933974196315\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/002221.log 
+2026/03/28-12:53:03.990 6824 Level-0 table #2243: started
+2026/03/28-12:53:04.010 6824 Level-0 table #2243: 1158711 bytes OK
+2026/03/28-12:53:04.012 6824 Delete type=0 #2221
+2026/03/28-12:53:05.693 4984 Compacting 1@0 + 1@1 files
+2026/03/28-12:53:05.732 4984 Generated table #2244@0: 26681 keys, 218391 bytes
+2026/03/28-12:53:05.745 4984 Generated table #2245@0: 10879 keys, 368978 bytes
+2026/03/28-12:53:05.750 4984 Generated table #2246@0: 1150 keys, 88135 bytes
+2026/03/28-12:53:05.750 4984 Compacted 1@0 + 1@1 files => 675504 bytes
+2026/03/28-12:53:05.750 4984 compacted to: files[ 0 3 42 0 0 0 0 ]
+2026/03/28-12:53:05.758 6824 Compacting 1@1 + 7@2 files
+2026/03/28-12:53:05.826 6824 Generated table #2247@1: 40833 keys, 2235256 bytes
+2026/03/28-12:53:05.884 6824 Generated table #2248@1: 29549 keys, 2270390 bytes
+2026/03/28-12:53:05.944 6824 Generated table #2249@1: 27817 keys, 2268342 bytes
+2026/03/28-12:53:06.001 6824 Generated table #2250@1: 30551 keys, 2259741 bytes
+2026/03/28-12:53:06.057 6824 Generated table #2251@1: 26360 keys, 2223401 bytes
+2026/03/28-12:53:06.105 6824 Generated table #2252@1: 34398 keys, 2216178 bytes
+2026/03/28-12:53:06.147 6824 Generated table #2253@1: 24915 keys, 2231545 bytes
+2026/03/28-12:53:06.148 6824 Generated table #2254@1: 25 keys, 2521 bytes
+2026/03/28-12:53:06.148 6824 Compacted 1@1 + 7@2 files => 15707374 bytes
+2026/03/28-12:53:06.149 6824 compacted to: files[ 0 2 43 0 0 0 0 ]
+2026/03/28-12:53:06.150 6824 Delete type=2 #2223
+2026/03/28-12:53:06.150 6824 Delete type=2 #2233
+2026/03/28-12:53:06.150 6824 Delete type=2 #2234
+2026/03/28-12:53:06.150 6824 Delete type=2 #2235
+2026/03/28-12:53:06.150 6824 Delete type=2 #2236
+2026/03/28-12:53:06.150 6824 Delete type=2 #2237
+2026/03/28-12:53:06.151 6824 Delete type=2 #2238
+2026/03/28-12:53:06.151 6824 Delete type=2 #2239
+2026/03/28-12:53:06.151 6824 Delete type=2 #2243
+2026/03/28-12:53:06.151 6824 Delete type=2 #2246
+2026/03/28-12:53:06.778 6824 Compacting 1@1 + 8@2 files
+2026/03/28-12:53:06.849 6824 Generated table #2255@1: 93044 keys, 2240973 bytes
+2026/03/28-12:53:06.918 6824 Generated table #2256@1: 87554 keys, 2266017 bytes
+2026/03/28-12:53:06.963 6824 Generated table #2257@1: 22835 keys, 2194879 bytes
+2026/03/28-12:53:07.029 6824 Generated table #2258@1: 67648 keys, 2233187 bytes
+2026/03/28-12:53:07.075 6824 Generated table #2259@1: 27320 keys, 2187823 bytes
+2026/03/28-12:53:07.102 6824 Generated table #2260@1: 2477 keys, 2154358 bytes
+2026/03/28-12:53:07.125 6824 Generated table #2261@1: 2622 keys, 2159014 bytes
+2026/03/28-12:53:07.129 6824 Generated table #2262@1: 229 keys, 195596 bytes
+2026/03/28-12:53:07.129 6824 Compacted 1@1 + 8@2 files => 15631847 bytes
+2026/03/28-12:53:07.129 6824 compacted to: files[ 0 1 43 0 0 0 0 ]
+2026/03/28-12:53:07.130 6824 Delete type=2 #2207
+2026/03/28-12:53:07.131 6824 Delete type=2 #2226
+2026/03/28-12:53:07.131 6824 Delete type=2 #2227
+2026/03/28-12:53:07.131 6824 Delete type=2 #2228
+2026/03/28-12:53:07.132 6824 Delete type=2 #2229
+2026/03/28-12:53:07.132 6824 Delete type=2 #2230
+2026/03/28-12:53:07.132 6824 Delete type=2 #2231
+2026/03/28-12:53:07.132 6824 Delete type=2 #2232
+2026/03/28-12:53:07.132 6824 Delete type=2 #2245
+2026/03/28-12:54:47.720 690c Compacting 1@1 + 1@2 files
+2026/03/28-12:54:47.741 690c Generated table #2263@1: 7440 keys, 1985918 bytes
+2026/03/28-12:54:47.741 690c Compacted 1@1 + 1@2 files => 1985918 bytes
+2026/03/28-12:54:47.742 690c compacted to: files[ 0 0 43 0 0 0 0 ]
+2026/03/28-12:54:47.742 690c Delete type=2 #2209
+2026/03/28-12:54:47.742 690c Delete type=2 #2244

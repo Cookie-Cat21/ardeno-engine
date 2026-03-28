@@ -127,7 +127,11 @@ function buildLeadCard(lead: Lead) {
     new ButtonBuilder()
       .setCustomId(`later_lead:${lead.id}`)
       .setLabel('⏳ Later')
-      .setStyle(ButtonStyle.Secondary)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`delete_lead:${lead.id}`)
+      .setLabel('🗑️ Delete')
+      .setStyle(ButtonStyle.Danger)
   )
 
   return { embeds: [embed], components: [row] }

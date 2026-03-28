@@ -1,0 +1,6 @@
+2026/03/28-12:52:59.999 7270 Reusing MANIFEST C:\Users\Ovindu\Documents\Ardeno Studio\ardeno-engine\.wwebjs_auth\session-956204933974196315\Default\Local Storage\leveldb/MANIFEST-000001
+2026/03/28-12:53:00.005 7270 Recovering log #4
+2026/03/28-12:53:00.007 7270 Reusing old log C:\Users\Ovindu\Documents\Ardeno Studio\ardeno-engine\.wwebjs_auth\session-956204933974196315\Default\Local Storage\leveldb/000004.log 
+2026/03/28-12:55:00.567 6cd0 Level-0 table #8: started
+2026/03/28-12:55:00.570 6cd0 Level-0 table #8: 14637 bytes OK
+2026/03/28-12:55:00.572 6cd0 Delete type=0 #4
