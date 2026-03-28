@@ -41,6 +41,73 @@ ${pageText.slice(0, 3000)}`
   }
 }
 
+/**
+ * Google search fallback — finds the official website for a business
+ * when Google Maps doesn't list one.
+ * Searches Google, dumps the results text, and asks Groq to identify the URL.
+ */
+async function googleSearchForWebsite(
+  businessName: string,
+  location: string,
+  page: any
+): Promise<string | undefined> {
+  try {
+    const query = encodeURIComponent(`"${businessName}" ${location} official website`)
+    await page.goto(`https://www.google.com/search?q=${query}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15000
+    })
+
+    // Dismiss cookie consent
+    await page.evaluate(() => {
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find(b => /accept all|i agree|agree|accept/i.test(b.textContent ?? ''))
+      if (btn) (btn as HTMLElement).click()
+    }).catch(() => {})
+
+    await page.waitForSelector('#search', { timeout: 6000 }).catch(() => {})
+
+    // Pull visible text + all href links from search results
+    const searchData = await page.evaluate(() => {
+      const text = document.body.innerText.slice(0, 3000)
+      const links = Array.from(document.querySelectorAll('#search a[href]'))
+        .map(a => (a as HTMLAnchorElement).href)
+        .filter(h => h.startsWith('http') && !h.includes('google.com') && !h.includes('maps.google'))
+        .slice(0, 15)
+      return { text, links }
+    })
+
+    const res = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{
+        role: 'user',
+        content: `I'm looking for the official website of "${businessName}" located in ${location}.
+
+Here are the top Google search result links:
+${searchData.links.join('\n')}
+
+And the page text:
+${searchData.text}
+
+Rules:
+- Return ONLY the official business website URL (starts with http)
+- Must be their own domain — NOT facebook.com, instagram.com, tripadvisor.com, yelp.com, google.com, maps.google.com, booking.com, or any directory/review site
+- If no official website is clearly identifiable, return null
+- Return ONLY valid JSON: {"website": "https://example.com"} or {"website": null}`
+      }],
+      temperature: 0,
+      max_tokens: 60
+    })
+
+    const raw = res.choices[0].message.content?.trim() ?? '{}'
+    const json = raw.match(/\{.*\}/s)?.[0] ?? '{}'
+    const parsed = JSON.parse(json)
+    return parsed.website ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 export interface RawBusiness {
   name: string
   place_id: string
