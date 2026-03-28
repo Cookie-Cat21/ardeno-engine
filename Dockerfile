@@ -53,7 +53,4 @@ RUN npm ci --omit=dev
 COPY . .
 RUN npm run build
 
-# WA session data lives here — mount a Railway volume at this path
-VOLUME ["/app/.wwebjs_auth"]
-
 CMD ["npm", "start"]
