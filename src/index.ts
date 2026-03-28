@@ -1048,6 +1048,45 @@ client.on(Events.MessageCreate, async (message: Message) => {
       })
     }
 
+  } else if (response.type === 'action' && response.action === 'rescan_leads') {
+    const { data: leads, error } = await supabase
+      .from('leads')
+      .select('id, business_name, google_maps_url, phone, website')
+      .or('phone.is.null,website.is.null')
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error || !leads || leads.length === 0) {
+      await message.reply('✅ No leads with missing contact info found.')
+      return
+    }
+
+    const statusMsg = await message.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0xff4d30)
+        .setTitle('🔄 Rescanning leads...')
+        .setDescription(`Found **${leads.length}** leads with missing phone/website. Scanning now...`)
+      ]
+    })
+
+    const { updated, skipped } = await rescanMissingLeads(leads, async (progress) => {
+      await statusMsg.edit({
+        embeds: [new EmbedBuilder()
+          .setColor(0xff4d30)
+          .setTitle('🔄 Rescanning...')
+          .setDescription(progress)
+        ]
+      })
+    })
+
+    await statusMsg.edit({
+      embeds: [new EmbedBuilder()
+        .setColor(Colors.Green)
+        .setTitle('✅ Rescan complete')
+        .setDescription(`Updated **${updated}** leads · Skipped **${skipped}** (no data found or no Maps URL)`)
+      ]
+    })
+
   } else if (response.type === 'action' && response.action === 'show_leads') {
     const { status, limit = 10 } = response.params ?? {}
 
