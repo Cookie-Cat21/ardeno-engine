@@ -333,6 +333,26 @@ client.on(Events.MessageCreate, async (message: Message) => {
   // Show typing indicator
   if ('sendTyping' in message.channel) await message.channel.sendTyping()
 
+  // Shortcut: ao report — trigger daily report on demand
+  if (/\breport\b/i.test(userText) || /daily report/i.test(userText)) {
+    await message.reply('Generating report...')
+    try {
+      const stats = await getDailyStats()
+      const { title, description, color } = formatDailyReport(stats, new Date())
+      await message.channel.send({
+        embeds: [new EmbedBuilder()
+          .setColor(color)
+          .setTitle(title)
+          .setDescription(description)
+          .setTimestamp()
+        ]
+      })
+    } catch (err: any) {
+      await message.reply(`❌ Failed to generate report: ${err?.message}`)
+    }
+    return
+  }
+
   // Shortcut: ao stats
   if (/\bstats?\b/i.test(userText) || /how (are we doing|many leads)/i.test(userText)) {
     const [total, approved, contacted, rejected, thisWeek] = await Promise.all([
