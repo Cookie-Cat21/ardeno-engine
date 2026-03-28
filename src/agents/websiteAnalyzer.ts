@@ -85,10 +85,7 @@ export async function analyzeWebsite(
 async function takeScreenshot(url: string): Promise<Buffer | null> {
   let browser = null
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
-    })
+    browser = await puppeteer.launch(getBrowserConfig())
     const page = await browser.newPage()
     await page.setViewport({ width: 1280, height: 900 })
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36')
