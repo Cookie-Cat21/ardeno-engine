@@ -515,9 +515,9 @@ client.on(Events.MessageCreate, async (message: Message) => {
           done++
 
           // Post each saved lead to the forum
-          for (const lead of result.saved) {
+          for (const [idx, lead] of result.saved.entries()) {
             try {
-              await postLeadToForum(lead, forum, tagCache, forumId, client)
+              await postLeadToForum(lead, forum, message.channel, forumId, idx)
             } catch {}
           }
 
