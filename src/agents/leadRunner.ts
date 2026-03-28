@@ -23,18 +23,41 @@ export async function runLeadEngine(
 
   onProgress?.(`Searching for "${niche}" businesses in ${location}...`)
 
-  let businesses
-  try {
-    businesses = await searchLeads(niche, location, limit)
-  } catch (e: any) {
-    throw new Error(`Scraper failed: ${e.message}`)
+  // Run Google Maps + Facebook in parallel
+  const [gmapsResult, fbResult] = await Promise.allSettled([
+    searchLeads(niche, location, limit),
+    searchFacebookLeads(niche, location, limit),
+  ])
+
+  const gmaps = gmapsResult.status === 'fulfilled' ? gmapsResult.value : []
+  const fb    = fbResult.status    === 'fulfilled' ? fbResult.value    : []
+
+  if (gmapsResult.status === 'rejected') {
+    throw new Error(`Scraper failed: ${(gmapsResult as any).reason?.message}`)
+  }
+
+  // Merge + deduplicate by normalised name
+  // (same business might appear on both Google Maps and Facebook)
+  const seen  = new Set<string>()
+  const businesses = [...gmaps, ...fb].filter(biz => {
+    const key = biz.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20)
+    if (seen.has(key)) {
+      console.log(`[LeadRunner] Deduped cross-source: ${biz.name}`)
+      return false
+    }
+    seen.add(key)
+    return true
+  })
+
+  if (fb.length > 0) {
+    console.log(`[LeadRunner] Sources: ${gmaps.length} Google Maps + ${fb.length} Facebook = ${businesses.length} total`)
   }
 
   if (businesses.length === 0) {
     return { found: 0, saved: [], errors: [] }
   }
 
-  onProgress?.(`Found ${businesses.length} businesses. Analysing with AI...`)
+  onProgress?.(`Found ${businesses.length} businesses (Maps + Facebook). Analysing with AI...`)
 
   // Filter out chains and franchises before spending any API calls on them
   const filtered = businesses.filter(biz => {
