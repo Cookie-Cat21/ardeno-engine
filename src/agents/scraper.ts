@@ -273,18 +273,34 @@ export async function rescanMissingLeads(
   const toScan = leads.filter(l => !l.phone || !l.website)
   if (toScan.length === 0) return { updated: 0, skipped: 0, updatedLeads: [] }
 
-  const browser = await puppeteer.launch(getBrowserConfig())
+  const BATCH = 25  // restart browser every N leads to free memory
   let updated = 0
   let skipped = 0
   const updatedLeads: RescanUpdate[] = []
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+
+  const newBrowser = () => puppeteer.launch(getBrowserConfig())
+  const newPage = async (br: any) => {
+    const p = await br.newPage()
+    await p.setUserAgent(UA)
+    return p
+  }
+
+  let browser = await newBrowser()
+  let page    = await newPage(browser)
 
   try {
-    let page = await browser.newPage()
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36')
-
     for (let i = 0; i < toScan.length; i++) {
       const lead = toScan[i]
       if (!lead.google_maps_url) { skipped++; continue }
+
+      // Restart browser every BATCH leads to prevent OOM
+      if (i > 0 && i % BATCH === 0) {
+        console.log(`[Rescan] ♻️ Restarting browser at lead ${i} to free memory`)
+        try { await browser.close() } catch {}
+        browser = await newBrowser()
+        page    = await newPage(browser)
+      }
 
       await onProgress(`🔍 [${i + 1}/${toScan.length}] Rescanning **${lead.business_name}**...`)
 
@@ -340,8 +356,7 @@ export async function rescanMissingLeads(
         if (e.message?.includes('detached Frame') || e.message?.includes('Target closed')) {
           console.log('[Rescan] Page crashed — opening fresh page and continuing')
           try { await page.close() } catch {}
-          page = await browser.newPage()
-          await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36')
+          page = await newPage(browser)
         }
       }
     }
