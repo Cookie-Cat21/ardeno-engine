@@ -210,6 +210,13 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
 
         phone = details.phone
         website = details.website
+
+        // If Maps page had no website, fall back to a Google search
+        if (!website) {
+          console.log(`[Scraper] No website on Maps for ${r.name} — trying Google search fallback`)
+          website = await googleSearchForWebsite(r.name, location, page)
+          if (website) console.log(`[Scraper] 🌐 Found via Google search: ${website}`)
+        }
       } catch {
         // Non-critical — continue without these details
       }
