@@ -310,49 +310,27 @@ client.once(Events.ClientReady, async (c) => {
 
 async function postCompetitorIntel(c: Client) {
   const generalChannelId = process.env.DISCORD_APPROVAL_CHANNEL_ID
-  const channel = generalChannelId
+  const general = generalChannelId
     ? await c.channels.fetch(generalChannelId).catch(() => null) as TextChannel | null
     : null
-  if (!channel) return
 
   const mentions = Object.values(TEAM).map(m => `<@${m.discordId}>`).join(' ')
 
-  await channel.send({
-    content: `${mentions} 🕵️ **Competitor Intel Report is ready** — here's what our rivals are up to this week:`,
-    embeds: [new EmbedBuilder()
-      .setColor(0x5865F2)
-      .setTitle('🕵️ Weekly Competitor Intel')
-      .setDescription(`Scanning **${COMPETITORS.length}** Sri Lankan web agencies...\nThis may take a minute — results posting below.`)
-    ]
+  // Announce in general that intel is starting
+  await general?.send({
+    content: `${mentions} 🕵️ Running competitor intel on **${COMPETITORS.length}** agencies — threads updating in <#${process.env.DISCORD_COMPETITORS_FORUM_ID}>`,
   })
 
-  const profiles = await runCompetitorIntel(COMPETITORS)
+  // Run intel — posts directly into forum threads
+  await runCompetitorIntel(COMPETITORS, c)
 
-  for (const profile of profiles) {
-    try {
-      const { embeds, files } = buildCompetitorEmbeds(profile)
-      await channel.send({ embeds, files })
-      await new Promise(r => setTimeout(r, 1500)) // space them out
-    } catch (err: any) {
-      console.error(`[Intel] Failed to post ${profile.name}:`, err?.message)
-    }
-  }
-
-  // Summary at the end
-  const successful = profiles.filter(p => !p.error || p.screenshot)
-  const summary = profiles.flatMap(p => p.opportunities).slice(0, 5)
-
-  await channel.send({
+  // Done ping in general
+  await general?.send({
     embeds: [new EmbedBuilder()
       .setColor(0x57F287)
-      .setTitle('📋 Intel Summary')
-      .setDescription([
-        `Analysed **${successful.length}/${COMPETITORS.length}** competitors.`,
-        '',
-        summary.length > 0 ? '**🎯 Top opportunities for Ardeno:**' : '',
-        ...summary.map(o => `• ${o}`)
-      ].filter(Boolean).join('\n'))
-      .setFooter({ text: 'Add more competitors in src/config/competitors.ts · ao intel to run anytime' })
+      .setTitle('✅ Competitor Intel Complete')
+      .setDescription(`All **${COMPETITORS.length}** competitor threads updated in <#${process.env.DISCORD_COMPETITORS_FORUM_ID}>.\n\nCheck the forum to see threat levels and opportunities.`)
+      .setFooter({ text: 'Runs every Sunday · ao intel to run anytime' })
     ]
   })
 }
