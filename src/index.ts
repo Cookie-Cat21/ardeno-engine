@@ -300,7 +300,62 @@ client.once(Events.ClientReady, async (c) => {
       console.error('[Cron] Daily report failed:', err?.message)
     }
   })
+
+  // Sunday 10am SL (4:30 UTC) — weekly competitor intel (rest day, no lead hunt)
+  cron.schedule('30 4 * * 0', async () => {
+    console.log('[Cron] Running weekly competitor intel...')
+    await postCompetitorIntel(c)
+  })
 })
+
+async function postCompetitorIntel(c: Client) {
+  const generalChannelId = process.env.DISCORD_APPROVAL_CHANNEL_ID
+  const channel = generalChannelId
+    ? await c.channels.fetch(generalChannelId).catch(() => null) as TextChannel | null
+    : null
+  if (!channel) return
+
+  const mentions = Object.values(TEAM).map(m => `<@${m.discordId}>`).join(' ')
+
+  await channel.send({
+    content: `${mentions} 🕵️ **Competitor Intel Report is ready** — here's what our rivals are up to this week:`,
+    embeds: [new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('🕵️ Weekly Competitor Intel')
+      .setDescription(`Scanning **${COMPETITORS.length}** Sri Lankan web agencies...\nThis may take a minute — results posting below.`)
+    ]
+  })
+
+  const profiles = await runCompetitorIntel(COMPETITORS)
+
+  for (const profile of profiles) {
+    try {
+      const { embeds, files } = buildCompetitorEmbeds(profile)
+      await channel.send({ embeds, files })
+      await new Promise(r => setTimeout(r, 1500)) // space them out
+    } catch (err: any) {
+      console.error(`[Intel] Failed to post ${profile.name}:`, err?.message)
+    }
+  }
+
+  // Summary at the end
+  const successful = profiles.filter(p => !p.error || p.screenshot)
+  const summary = profiles.flatMap(p => p.opportunities).slice(0, 5)
+
+  await channel.send({
+    embeds: [new EmbedBuilder()
+      .setColor(0x57F287)
+      .setTitle('📋 Intel Summary')
+      .setDescription([
+        `Analysed **${successful.length}/${COMPETITORS.length}** competitors.`,
+        '',
+        summary.length > 0 ? '**🎯 Top opportunities for Ardeno:**' : '',
+        ...summary.map(o => `• ${o}`)
+      ].filter(Boolean).join('\n'))
+      .setFooter({ text: 'Add more competitors in src/config/competitors.ts · ao intel to run anytime' })
+    ]
+  })
+}
 
 client.on(Events.MessageCreate, async (message: Message) => {
   if (message.author.bot) return
