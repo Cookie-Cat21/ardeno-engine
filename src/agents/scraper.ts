@@ -333,6 +333,7 @@ export async function rescanMissingLeads(
         try { await browser.close() } catch {}
         browser = await newBrowser()
         page    = await newPage(browser)
+        await acceptGoogleConsent(page)
       }
 
       await onProgress(`🔍 [${i + 1}/${toScan.length}] Rescanning **${lead.business_name}**...`)
