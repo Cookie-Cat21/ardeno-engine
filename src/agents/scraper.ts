@@ -279,7 +279,7 @@ export async function rescanMissingLeads(
   const updatedLeads: RescanUpdate[] = []
 
   try {
-    const page = await browser.newPage()
+    let page = await browser.newPage()
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36')
 
     for (let i = 0; i < toScan.length; i++) {
