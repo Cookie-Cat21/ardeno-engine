@@ -6,7 +6,7 @@ import puppeteer from 'puppeteer'
 import Groq from 'groq-sdk'
 import {
   AttachmentBuilder, EmbedBuilder,
-  ForumChannel, ChannelType, Client
+  ForumChannel, ChannelType, Client,
 } from 'discord.js'
 import type { Competitor } from '../config/competitors'
 import { ARDENO_POSITIONING } from '../config/competitors'
