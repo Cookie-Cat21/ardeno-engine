@@ -518,14 +518,14 @@ client.on(Events.MessageCreate, async (message: Message) => {
           // Post each saved lead to the forum
           for (const [idx, lead] of result.saved.entries()) {
             try {
-              await postLeadToForum(lead, forum, message.channel, forumId, idx)
+              await postLeadToForum(lead, forum, general, forumId, idx)
             } catch {}
           }
 
           // Progress update every 10 niches
           if (done % 10 === 0 || done === ALL_NICHES.length) {
             const remaining = ALL_NICHES.length - done
-            await message.channel.send({
+            await general.send({
               embeds: [new EmbedBuilder()
                 .setColor(0x5865F2)
                 .setTitle(`🔥 Mega Hunt — ${done}/${ALL_NICHES.length} niches done`)
