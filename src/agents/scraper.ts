@@ -8,6 +8,7 @@ export interface RawBusiness {
   phone?: string
   email?: string
   website?: string
+  socials?: string[]   // Instagram, Facebook, TikTok, etc. found on their website
   rating?: number
   review_count?: number
   google_maps_url: string
