@@ -48,9 +48,12 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
 COPY . .
 RUN npm run build
+
+# Remove devDependencies after build to keep image lean
+RUN npm prune --omit=dev
 
 CMD ["npm", "start"]
