@@ -105,6 +105,15 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
             if (telLink) phone = telLink.href.replace('tel:', '')
           }
 
+          // Strip invisible/special Unicode characters Google Maps injects
+          // (zero-width spaces, LTR marks, non-breaking spaces, etc.)
+          if (phone) {
+            phone = phone
+              .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD]/g, '') // invisible chars
+              .replace(/\u00A0/g, ' ') // non-breaking space → regular space
+              .trim()
+          }
+
           // Website
           const webEl = document.querySelector('a[data-item-id="authority"]') as HTMLAnchorElement | null
             ?? document.querySelector('a[aria-label*="website"]') as HTMLAnchorElement | null
