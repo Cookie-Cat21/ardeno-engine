@@ -253,29 +253,40 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
   }
 }
 
+export interface RescanUpdate {
+  id: string
+  business_name: string
+  discord_message_id?: string
+  phone?: string
+  website?: string
+}
+
 /**
  * Re-visits Google Maps pages for leads that are missing phone/website
- * and fills them in using AI extraction.
+ * and fills them in using AI + Google search fallback.
+ * Returns list of updated leads so the caller can refresh Discord embeds.
  */
 export async function rescanMissingLeads(
-  leads: Array<{ id: string; business_name: string; google_maps_url?: string; phone?: string; website?: string }>,
+  leads: Array<{ id: string; business_name: string; google_maps_url?: string; phone?: string; website?: string; discord_message_id?: string }>,
   onProgress: (msg: string) => Promise<void>
-): Promise<{ updated: number; skipped: number }> {
+): Promise<{ updated: number; skipped: number; updatedLeads: RescanUpdate[] }> {
   const toScan = leads.filter(l => !l.phone || !l.website)
-  if (toScan.length === 0) return { updated: 0, skipped: 0 }
+  if (toScan.length === 0) return { updated: 0, skipped: 0, updatedLeads: [] }
 
   const browser = await puppeteer.launch(getBrowserConfig())
   let updated = 0
   let skipped = 0
+  const updatedLeads: RescanUpdate[] = []
 
   try {
     const page = await browser.newPage()
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36')
 
-    for (const lead of toScan) {
+    for (let i = 0; i < toScan.length; i++) {
+      const lead = toScan[i]
       if (!lead.google_maps_url) { skipped++; continue }
 
-      await onProgress(`🔍 Rescanning **${lead.business_name}**...`)
+      await onProgress(`🔍 [${i + 1}/${toScan.length}] Rescanning **${lead.business_name}**...`)
 
       try {
         await page.goto(lead.google_maps_url, { waitUntil: 'domcontentloaded', timeout: 20000 })
@@ -300,7 +311,7 @@ export async function rescanMissingLeads(
           if (details.website) console.log(`[Rescan] 🌐 Found via Google: ${details.website}`)
         }
 
-        // Only update fields that were missing
+        // Only patch fields that were missing
         const patch: Record<string, string> = {}
         if (!lead.phone && details.phone)     patch.phone   = details.phone
         if (!lead.website && details.website) patch.website = details.website
@@ -310,6 +321,13 @@ export async function rescanMissingLeads(
           await supabase.from('leads').update(patch).eq('id', lead.id)
           updated++
           console.log(`[Rescan] ✅ ${lead.business_name} — ${JSON.stringify(patch)}`)
+          updatedLeads.push({
+            id: lead.id,
+            business_name: lead.business_name,
+            discord_message_id: lead.discord_message_id,
+            phone:   patch.phone   ?? lead.phone,
+            website: patch.website ?? lead.website
+          })
         } else {
           skipped++
           console.log(`[Rescan] ⬜ ${lead.business_name} — nothing new found`)
@@ -323,7 +341,7 @@ export async function rescanMissingLeads(
     await browser.close()
   }
 
-  return { updated, skipped }
+  return { updated, skipped, updatedLeads }
 }
 
 async function scrollResults(page: any, targetCount: number): Promise<void> {
