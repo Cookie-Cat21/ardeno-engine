@@ -123,7 +123,7 @@ client.once(Events.ClientReady, async (c) => {
       embeds: [new EmbedBuilder()
         .setColor(0xff4d30)
         .setTitle('🌅 Daily Lead Hunt Starting')
-        .setDescription(`Searching for **${niches.join(' + ')}** across **${targets.length / niches.length} locations**.\nNew leads will appear in <#${forumId}> as they're found.`)
+        .setDescription(`${getTodaysSummary()}\n\nNew leads will appear in <#${forumId}> as they're found.`)
         .setFooter({ text: `Ardeno OS — Automated Hunt` })
       ]
     })
