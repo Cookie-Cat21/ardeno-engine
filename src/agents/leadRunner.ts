@@ -1,4 +1,5 @@
 import { searchLeads } from './scraper'
+import { searchFacebookLeads } from './facebookScraper'
 import { analyzeLead } from './analyzer'
 import { saveLead } from '../db/supabase'
 import type { Lead } from '../db/supabase'
