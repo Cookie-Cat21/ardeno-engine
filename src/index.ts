@@ -49,6 +49,46 @@ client.once(Events.ClientReady, async (c) => {
   // Init WhatsApp sessions for all team members
   initWhatsApp(c).catch(console.error)
 
+  // Handle incoming WhatsApp replies from leads
+  onWhatsAppReply(async ({ discordId, senderPhone, body, timestamp }) => {
+    try {
+      const lead = await findLeadByPhone(senderPhone)
+      if (!lead) return // not a lead we know about
+
+      console.log(`[WhatsApp] 🎉 Reply from lead: ${lead.business_name} — "${body.slice(0, 60)}"`)
+
+      // Update lead status
+      await updateLeadStatus(lead.id!, 'responded')
+
+      // Post in the lead's Discord forum thread
+      if (lead.discord_message_id) {
+        const thread = await c.channels.fetch(lead.discord_message_id).catch(() => null)
+        if (thread && thread.isThread()) {
+          await thread.send({
+            content: `<@${discordId}> 🎉 **${lead.business_name} just replied on WhatsApp!**`,
+            embeds: [new EmbedBuilder()
+              .setColor(0x25D366)
+              .setTitle('📱 WhatsApp Reply Received')
+              .setDescription(`*"${body}"*`)
+              .addFields({ name: '📍 Business', value: lead.business_name, inline: true })
+              .setTimestamp(timestamp)
+              .setFooter({ text: `Received on ${TEAM[discordId]?.name ?? 'your'} WhatsApp` })
+            ]
+          })
+        }
+      }
+
+      // Also DM the founder directly so they never miss it
+      try {
+        const founder = await c.users.fetch(discordId)
+        await founder.send(`📱 **${lead.business_name}** replied on WhatsApp:\n\n*"${body}"*\n\nCheck the lead thread to respond.`)
+      } catch {}
+
+    } catch (err: any) {
+      console.error(`[WhatsApp] Error handling reply:`, err?.message)
+    }
+  })
+
   // Auto-create forum tags
   const forumId = process.env.DISCORD_LEADS_FORUM_ID
   if (forumId) {
