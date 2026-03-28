@@ -102,4 +102,36 @@ export function getTodaysSummary(): string {
   return `Week ${weekLabel} · ${niches.join(', ')} · ${LOCATIONS.length} locations · ${niches.length * LOCATIONS.length} searches`
 }
 
+// Every niche across all weeks + bonus — used for mega hunts
+export const ALL_NICHES: string[] = [
+  // Week A
+  'restaurants', 'cafes',
+  'gyms', 'fitness centres',
+  'hotels', 'travel agencies',
+  'salons', 'spas',
+  'dental clinics', 'law firms',
+  'real estate agencies', 'interior designers',
+  // Week B
+  'bakeries', 'catering services',
+  'yoga studios', 'pilates studios',
+  'guesthouses', 'villa rentals',
+  'nail salons', 'barbershops',
+  'accounting firms', 'consulting firms',
+  'clothing boutiques', 'jewelry stores',
+  // Week C
+  'photographers', 'event planners',
+  'physiotherapy clinics', 'wellness centres',
+  'tour operators', 'event venues',
+  'bridal studios', 'beauty clinics',
+  'marketing agencies', 'insurance companies',
+  'furniture shops', 'electronics shops',
+  // Bonus
+  'wedding planners', 'florists',
+  'ayurvedic clinics', 'nutritionists',
+  'car dealerships', 'driving schools',
+  'pet shops', 'gift shops',
+  'architects', 'construction companies',
+  'sports shops', 'bookshops',
+]
+
 export { LOCATIONS }
