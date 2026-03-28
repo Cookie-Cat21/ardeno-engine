@@ -1288,11 +1288,4 @@ function runWebsiteAudit(
     .catch(() => null)
 }
 
-// Minimal HTTP health check server so Railway doesn't kill the process
-import { createServer } from 'http'
-const PORT = process.env.PORT || 3000
-createServer((_, res) => { res.writeHead(200); res.end('ok') }).listen(PORT, () => {
-  console.log(`[Health] HTTP server listening on port ${PORT}`)
-})
-
 client.login(process.env.DISCORD_TOKEN)
