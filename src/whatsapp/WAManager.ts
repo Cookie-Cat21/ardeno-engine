@@ -94,25 +94,45 @@ async function initSession(member: TeamMember, discordClient: DiscordClient): Pr
     console.error(`[WhatsApp] Auth failed for ${member.name}:`, msg)
   })
 
-  // Listen for incoming messages — detect lead replies
+  // Listen for incoming messages — only notify for leads we've reached out to
   wa.on('message', async (msg) => {
     try {
-      // Ignore our own messages and group chats
-      if (msg.fromMe) return
-      if (msg.from.includes('@g.us')) return // group chat
+      // ── Basic filters ───────────────────────────────────────────────────
+      if (msg.fromMe) return                    // our own messages
+      if (msg.from.includes('@g.us')) return    // group chats
       if (!_replyHandler) return
 
+      // ── Startup replay guard ────────────────────────────────────────────
+      // whatsapp-web.js replays recent messages on init — skip anything
+      // that arrived before this bot session started
+      const msgTimeMs = (msg.timestamp ?? 0) * 1000
+      if (msgTimeMs < BOT_START_MS) return
+
+      // ── Deduplication ───────────────────────────────────────────────────
+      const msgId = (msg.id as any)?._serialized ?? msg.id
+      if (msgId && processedMsgIds.has(msgId)) return
+      if (msgId) processedMsgIds.add(msgId)
+
+      // ── Outreach filter — only notify for numbers we messaged ───────────
       const senderPhone = msg.from.replace('@c.us', '')
+      const normalized  = normalizePhone(senderPhone)
+
+      if (!outreachedPhones.has(normalized)) {
+        // Not a lead we contacted — silently ignore
+        console.log(`[WhatsApp] 📩 Ignored message from ${normalized} (not in outreach list)`)
+        return
+      }
+
       const body = msg.hasMedia ? `📎 [Sent a ${msg.type}]` : (msg.body || '').trim()
       if (!body) return
 
-      console.log(`[WhatsApp] 📩 Incoming on ${member.name}'s account from ${senderPhone}`)
+      console.log(`[WhatsApp] 🎉 Lead reply from ${normalized} on ${member.name}'s account`)
 
       await _replyHandler({
-        discordId: member.discordId,
-        senderPhone,
+        discordId:   member.discordId,
+        senderPhone: normalized,
         body,
-        timestamp: new Date(msg.timestamp * 1000)
+        timestamp:   new Date(msgTimeMs)
       })
     } catch (err: any) {
       console.error(`[WhatsApp] Reply handler error:`, err?.message)
