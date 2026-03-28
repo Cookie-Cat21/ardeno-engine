@@ -2,7 +2,11 @@ import { ButtonInteraction, EmbedBuilder, Colors, ActionRowBuilder, ButtonBuilde
 import { getLeadById, updateLeadStatus, supabase } from '../../db/supabase'
 import { draftOutreachEmail, sendEmail } from '../../agents/emailDrafter'
 import { getMember } from '../../config/team'
-import { draftWhatsAppMessage, sendWhatsAppMessage, isReady } from '../../whatsapp/WAManager'
+// TODO: re-enable when WhatsApp is turned back on
+// import { draftWhatsAppMessage, sendWhatsAppMessage, isReady } from '../../whatsapp/WAManager'
+const draftWhatsAppMessage = async (..._: any[]) => 'WhatsApp disabled'
+const sendWhatsAppMessage  = async (..._: any[]) => { throw new Error('WhatsApp is disabled') }
+const isReady              = (_: any) => false
 
 // Apply a forum tag by name to the current thread
 async function applyForumTag(interaction: ButtonInteraction, tagName: string) {
