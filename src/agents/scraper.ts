@@ -335,6 +335,14 @@ export async function rescanMissingLeads(
       } catch (e: any) {
         console.log(`[Rescan] ❌ ${lead.business_name} — ${e.message}`)
         skipped++
+
+        // If the frame detached (page crashed), open a fresh page and carry on
+        if (e.message?.includes('detached Frame') || e.message?.includes('Target closed')) {
+          console.log('[Rescan] Page crashed — opening fresh page and continuing')
+          try { await page.close() } catch {}
+          page = await browser.newPage()
+          await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36')
+        }
       }
     }
   } finally {
