@@ -36,6 +36,12 @@ import { COMPETITORS } from './config/competitors'
 
 dotenv.config()
 
+// Catch silent crashes
+process.on('uncaughtException',  (e) => console.error('[CRASH] uncaughtException:', e))
+process.on('unhandledRejection', (e) => console.error('[CRASH] unhandledRejection:', e))
+
+console.log('[Boot] process started, imports loaded')
+
 const PREFIX = 'ao'
 const HOT_LEAD_SCORE = 80 // Ping founders when a lead hits this score
 
