@@ -19,10 +19,7 @@ export interface RawBusiness {
 export async function searchLeads(niche: string, location: string, limit = 20): Promise<RawBusiness[]> {
   console.log(`[Scraper] Opening Google Maps: "${niche}" in ${location}`)
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-  })
+  const browser = await puppeteer.launch(getBrowserConfig())
 
   try {
     const page = await browser.newPage()
