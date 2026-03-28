@@ -117,10 +117,13 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
         // Non-critical — continue without these details
       }
 
-      // Scrape email from website
+      // Scrape email + socials from website in one fetch
       let email: string | undefined
+      let socials: string[] | undefined
       if (website) {
-        email = await scrapeEmailFromWebsite(website)
+        const contact = await scrapeContactInfo(website)
+        email = contact.email
+        socials = contact.socials.length > 0 ? contact.socials : undefined
       }
 
       businesses.push({
@@ -130,6 +133,7 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
         phone,
         email,
         website,
+        socials,
         rating: r.rating,
         review_count: r.review_count,
         google_maps_url: r.href || `https://www.google.com/maps/search/${encodeURIComponent(r.name + ' ' + location)}`,
