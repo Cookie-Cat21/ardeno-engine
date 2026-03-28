@@ -122,7 +122,7 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
       let website: string | undefined
 
       try {
-        // Click into each business to get phone + website
+        // Navigate to the individual business page
         await page.goto(r.href, { waitUntil: 'domcontentloaded', timeout: 20000 })
 
         // Dismiss Google cookie consent if it appears (EU servers on Railway)
@@ -134,47 +134,12 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
           if (accept) (accept as HTMLElement).click()
         }).catch(() => {})
 
-        // Wait for the business details panel to load (phone/website live inside here)
-        await page.waitForSelector('[data-item-id^="phone"], a[data-item-id="authority"], a[href^="tel:"]', {
-          timeout: 8000
-        }).catch(() => {}) // don't throw if not found — business may just not have these
+        // Wait for main content to settle
+        await page.waitForSelector('h1', { timeout: 8000 }).catch(() => {})
 
-        const details = await page.evaluate(() => {
-          let phone: string | undefined
-          let website: string | undefined
-
-          // Phone number — try all known Google Maps selectors
-          const phoneEl =
-            document.querySelector('button[data-tooltip="Copy phone number"] div') ??
-            document.querySelector('[data-item-id^="phone"] div') ??
-            document.querySelector('[data-item-id^="phone"]') ??
-            Array.from(document.querySelectorAll('button[aria-label*="phone"]'))[0] ??
-            Array.from(document.querySelectorAll('button[aria-label*="Phone"]'))[0]
-          if (phoneEl) phone = phoneEl.textContent?.trim()
-
-          // Phone fallback — tel: links
-          if (!phone) {
-            const telLink = document.querySelector('a[href^="tel:"]') as HTMLAnchorElement | null
-            if (telLink) phone = telLink.href.replace('tel:', '')
-          }
-
-          // Strip invisible/special Unicode characters Google Maps injects
-          if (phone) {
-            phone = phone
-              .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD]/g, '')
-              .replace(/\u00A0/g, ' ')
-              .trim()
-          }
-
-          // Website
-          const webEl =
-            document.querySelector('a[data-item-id="authority"]') as HTMLAnchorElement | null ??
-            document.querySelector('a[aria-label*="website"]') as HTMLAnchorElement | null ??
-            document.querySelector('a[aria-label*="Website"]') as HTMLAnchorElement | null
-          if (webEl) website = webEl.href
-
-          return { phone, website }
-        })
+        // Dump visible page text and let AI extract phone + website
+        const pageText = await page.evaluate(() => document.body.innerText)
+        const details = await extractDetailsWithAI(pageText)
 
         phone = details.phone
         website = details.website
