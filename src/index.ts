@@ -270,6 +270,34 @@ client.once(Events.ClientReady, async (c) => {
       await supabase.from('leads').update({ remind_at: null }).eq('id', lead.id)
     }
   })
+
+  // 6pm Sri Lanka time (UTC+5:30 = 12:30 UTC) — daily pipeline report
+  cron.schedule('30 12 * * *', async () => {
+    console.log('[Cron] Generating daily pipeline report...')
+    const generalChannelId = process.env.DISCORD_APPROVAL_CHANNEL_ID
+    const channel = generalChannelId
+      ? await c.channels.fetch(generalChannelId).catch(() => null) as TextChannel | null
+      : null
+    if (!channel) return
+
+    try {
+      const stats = await getDailyStats()
+      const { title, description, color } = formatDailyReport(stats, new Date())
+      const mentions = Object.values(TEAM).map(m => `<@${m.discordId}>`).join(' ')
+
+      await channel.send({
+        content: stats.found > 0 || stats.responded > 0 ? mentions : undefined,
+        embeds: [new EmbedBuilder()
+          .setColor(color)
+          .setTitle(title)
+          .setDescription(description)
+          .setTimestamp()
+        ]
+      })
+    } catch (err: any) {
+      console.error('[Cron] Daily report failed:', err?.message)
+    }
+  })
 })
 
 client.on(Events.MessageCreate, async (message: Message) => {
