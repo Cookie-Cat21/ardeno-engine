@@ -390,6 +390,13 @@ client.on(Events.MessageCreate, async (message: Message) => {
   // Show typing indicator
   if ('sendTyping' in message.channel) await message.channel.sendTyping()
 
+  // Shortcut: ao intel — run competitor intelligence on demand
+  if (/\bintel\b/i.test(userText) || /competitor/i.test(userText)) {
+    await message.reply(`🕵️ Running competitor intel on **${COMPETITORS.length}** agencies — results coming in a minute...`)
+    postCompetitorIntel(client).catch(console.error)
+    return
+  }
+
   // Shortcut: ao report — trigger daily report on demand
   if (/\breport\b/i.test(userText) || /daily report/i.test(userText)) {
     await message.reply('Generating report...')
