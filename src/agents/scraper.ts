@@ -84,37 +84,54 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
 
       try {
         // Click into each business to get phone + website
-        await page.goto(r.href, { waitUntil: 'domcontentloaded', timeout: 15000 })
-        await sleep(2000)
+        await page.goto(r.href, { waitUntil: 'domcontentloaded', timeout: 20000 })
+
+        // Dismiss Google cookie consent if it appears (EU servers on Railway)
+        await page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button'))
+          const accept = buttons.find(b =>
+            /accept all|i agree|agree|accept/i.test(b.textContent ?? '')
+          )
+          if (accept) (accept as HTMLElement).click()
+        }).catch(() => {})
+
+        // Wait for the business details panel to load (phone/website live inside here)
+        await page.waitForSelector('[data-item-id^="phone"], a[data-item-id="authority"], a[href^="tel:"]', {
+          timeout: 8000
+        }).catch(() => {}) // don't throw if not found — business may just not have these
 
         const details = await page.evaluate(() => {
           let phone: string | undefined
           let website: string | undefined
 
-          // Phone number
-          const phoneEl = document.querySelector('button[data-tooltip="Copy phone number"] div')
-            ?? document.querySelector('[data-item-id^="phone"] div')
-            ?? Array.from(document.querySelectorAll('button[aria-label*="phone"]'))[0]
+          // Phone number — try all known Google Maps selectors
+          const phoneEl =
+            document.querySelector('button[data-tooltip="Copy phone number"] div') ??
+            document.querySelector('[data-item-id^="phone"] div') ??
+            document.querySelector('[data-item-id^="phone"]') ??
+            Array.from(document.querySelectorAll('button[aria-label*="phone"]'))[0] ??
+            Array.from(document.querySelectorAll('button[aria-label*="Phone"]'))[0]
           if (phoneEl) phone = phoneEl.textContent?.trim()
 
-          // Phone fallback — look for tel: links
+          // Phone fallback — tel: links
           if (!phone) {
             const telLink = document.querySelector('a[href^="tel:"]') as HTMLAnchorElement | null
             if (telLink) phone = telLink.href.replace('tel:', '')
           }
 
           // Strip invisible/special Unicode characters Google Maps injects
-          // (zero-width spaces, LTR marks, non-breaking spaces, etc.)
           if (phone) {
             phone = phone
-              .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD]/g, '') // invisible chars
-              .replace(/\u00A0/g, ' ') // non-breaking space → regular space
+              .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD]/g, '')
+              .replace(/\u00A0/g, ' ')
               .trim()
           }
 
           // Website
-          const webEl = document.querySelector('a[data-item-id="authority"]') as HTMLAnchorElement | null
-            ?? document.querySelector('a[aria-label*="website"]') as HTMLAnchorElement | null
+          const webEl =
+            document.querySelector('a[data-item-id="authority"]') as HTMLAnchorElement | null ??
+            document.querySelector('a[aria-label*="website"]') as HTMLAnchorElement | null ??
+            document.querySelector('a[aria-label*="Website"]') as HTMLAnchorElement | null
           if (webEl) website = webEl.href
 
           return { phone, website }
