@@ -292,9 +292,17 @@ export async function rescanMissingLeads(
         const pageText = await page.evaluate(() => document.body.innerText)
         const details = await extractDetailsWithAI(pageText)
 
+        // If Maps page still has no website, try Google search fallback
+        if (!lead.website && !details.website) {
+          console.log(`[Rescan] No website on Maps for ${lead.business_name} — trying Google search`)
+          const locationGuess = lead.google_maps_url?.match(/place\/[^/]+\/([^/]+)/)?.[1] ?? ''
+          details.website = await googleSearchForWebsite(lead.business_name, locationGuess, page)
+          if (details.website) console.log(`[Rescan] 🌐 Found via Google: ${details.website}`)
+        }
+
         // Only update fields that were missing
         const patch: Record<string, string> = {}
-        if (!lead.phone && details.phone)   patch.phone   = details.phone
+        if (!lead.phone && details.phone)     patch.phone   = details.phone
         if (!lead.website && details.website) patch.website = details.website
 
         if (Object.keys(patch).length > 0) {
