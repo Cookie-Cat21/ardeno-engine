@@ -60,6 +60,25 @@ export async function findLeadByPhone(waPhone: string): Promise<Lead | null> {
   return data?.[0] ?? null
 }
 
+// ─── Competitor thread tracking ────────────────────────────────────────────────
+
+export async function getCompetitorThread(name: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('competitor_threads')
+    .select('thread_id')
+    .eq('name', name)
+    .single()
+  return data?.thread_id ?? null
+}
+
+export async function upsertCompetitorThread(name: string, url: string, threadId: string): Promise<void> {
+  await supabase
+    .from('competitor_threads')
+    .upsert({ name, url, thread_id: threadId, last_run_at: new Date().toISOString() }, { onConflict: 'name' })
+}
+
+// ─── Lead helpers ──────────────────────────────────────────────────────────────
+
 export async function isDuplicate(businessName: string, location: string): Promise<boolean> {
   const { data } = await supabase
     .from('leads')
