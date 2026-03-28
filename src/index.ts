@@ -339,7 +339,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
     try {
       const stats = await getDailyStats()
       const { title, description, color } = formatDailyReport(stats, new Date())
-      await message.channel.send({
+      await message.reply({
         embeds: [new EmbedBuilder()
           .setColor(color)
           .setTitle(title)
