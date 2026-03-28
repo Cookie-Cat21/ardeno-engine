@@ -337,8 +337,8 @@ client.on(Events.MessageCreate, async (message: Message) => {
   if (/\breport\b/i.test(userText) || /daily report/i.test(userText)) {
     await message.reply('Generating report...')
     try {
-      const stats = await getDailyStats()
-      const { title, description, color } = formatDailyReport(stats, new Date())
+      const { today, yesterday } = await getDailyStatsWithComparison()
+      const { title, description, color } = formatDailyReport(today, yesterday, new Date())
       await message.reply({
         embeds: [new EmbedBuilder()
           .setColor(color)
