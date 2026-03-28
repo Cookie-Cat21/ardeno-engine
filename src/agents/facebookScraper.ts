@@ -74,7 +74,10 @@ export async function searchFacebookLeads(
       const name: string  = place.name ?? ''
       if (!name) continue
 
-      const phone:   string | undefined = place.phone   ?? undefined
+      const rawPhone = place.phone as string | undefined
+      const phone: string | undefined = rawPhone
+        ? rawPhone.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD\u00A0]/g, '').trim() || undefined
+        : undefined
       const website: string | undefined = place.website ?? undefined
       const fbUrl:   string             = place.link    ?? `https://www.facebook.com/${place.id}`
 
