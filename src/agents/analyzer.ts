@@ -31,6 +31,11 @@ export async function analyzeLead(
 
   const parsed = parseAnalysis(raw)
 
+  // Map socials array to individual fields
+  const socials = business.socials ?? []
+  const instagram = socials.find(s => s.includes('instagram.com'))
+  const facebook  = socials.find(s => s.includes('facebook.com'))
+
   return {
     business_name: business.name,
     niche,
@@ -41,6 +46,8 @@ export async function analyzeLead(
     google_maps_url: business.google_maps_url,
     google_rating: business.rating,
     review_count: business.review_count,
+    instagram,
+    facebook,
     score: parsed.score,
     score_reasons: parsed.reasons,
     gap_analysis: parsed.gaps,
