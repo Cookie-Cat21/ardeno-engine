@@ -77,6 +77,41 @@ export async function upsertCompetitorThread(name: string, url: string, threadId
     .upsert({ name, url, thread_id: threadId, last_run_at: new Date().toISOString() }, { onConflict: 'name' })
 }
 
+export interface CompetitorSnapshot {
+  thread_id:          string | null
+  ig_username:        string | null
+  ig_post_count:      number | null
+  site_snapshot:      string | null
+  portfolio_snapshot: string | null
+}
+
+export async function getCompetitorSnapshot(name: string): Promise<CompetitorSnapshot> {
+  const { data } = await supabase
+    .from('competitor_threads')
+    .select('thread_id, ig_username, ig_post_count, site_snapshot, portfolio_snapshot')
+    .eq('name', name)
+    .single()
+  return {
+    thread_id:          data?.thread_id          ?? null,
+    ig_username:        data?.ig_username        ?? null,
+    ig_post_count:      data?.ig_post_count      ?? null,
+    site_snapshot:      data?.site_snapshot      ?? null,
+    portfolio_snapshot: data?.portfolio_snapshot ?? null,
+  }
+}
+
+export async function updateCompetitorSnapshot(name: string, data: Partial<{
+  ig_username:        string
+  ig_post_count:      number
+  site_snapshot:      string
+  portfolio_snapshot: string
+}>): Promise<void> {
+  await supabase
+    .from('competitor_threads')
+    .update({ ...data, last_run_at: new Date().toISOString() })
+    .eq('name', name)
+}
+
 // ─── Lead helpers ──────────────────────────────────────────────────────────────
 
 export async function isDuplicate(businessName: string, location: string): Promise<boolean> {
