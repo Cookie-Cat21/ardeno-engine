@@ -3,6 +3,7 @@ import { analyzeLead } from './analyzer'
 import { saveLead } from '../db/supabase'
 import type { Lead } from '../db/supabase'
 import { getLighthouseScores } from './lighthouse'
+import { isChainOrFranchise } from '../config/chains'
 
 export interface LeadRunResult {
   found: number
