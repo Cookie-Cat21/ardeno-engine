@@ -75,6 +75,31 @@ async function initSession(member: TeamMember, discordClient: DiscordClient): Pr
     console.error(`[WhatsApp] Auth failed for ${member.name}:`, msg)
   })
 
+  // Listen for incoming messages — detect lead replies
+  wa.on('message', async (msg) => {
+    try {
+      // Ignore our own messages and group chats
+      if (msg.fromMe) return
+      if (msg.from.includes('@g.us')) return // group chat
+      if (!_replyHandler) return
+
+      const senderPhone = msg.from.replace('@c.us', '')
+      const body = msg.hasMedia ? `📎 [Sent a ${msg.type}]` : (msg.body || '').trim()
+      if (!body) return
+
+      console.log(`[WhatsApp] 📩 Incoming on ${member.name}'s account from ${senderPhone}`)
+
+      await _replyHandler({
+        discordId: member.discordId,
+        senderPhone,
+        body,
+        timestamp: new Date(msg.timestamp * 1000)
+      })
+    } catch (err: any) {
+      console.error(`[WhatsApp] Reply handler error:`, err?.message)
+    }
+  })
+
   sessions.set(member.discordId, wa)
   ready.set(member.discordId, false)
 
