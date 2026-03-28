@@ -41,9 +41,11 @@ export async function searchLeads(niche: string, location: string, limit = 20): 
     // Scroll to load more results
     await scrollResults(page, limit)
 
-    // Extract business cards
+    // Extract business cards — only divs that have a real business link inside them
     const results = await page.evaluate((maxResults: number) => {
-      const cards = Array.from(document.querySelectorAll('[role="feed"] > div'))
+      const allCards = Array.from(document.querySelectorAll('[role="feed"] > div'))
+      // Filter to only real business cards (have an anchor with aria-label)
+      const cards = allCards.filter(el => el.querySelector('a[aria-label]') !== null)
       const businesses: any[] = []
 
       for (const card of cards.slice(0, maxResults)) {
