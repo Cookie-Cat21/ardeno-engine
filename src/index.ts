@@ -29,7 +29,7 @@ import { getTodaysTargets, getTodaysNiches } from './scheduler/dailyHunt'
 import { getDailyStats, getDailyStatsWithComparison, formatDailyReport } from './scheduler/dailyReport'
 import { lighthouseBlock, lighthouseSummary } from './agents/lighthouse'
 import { analyzeWebsite, formatAuditEmbed } from './agents/websiteAnalyzer'
-import { runCompetitorIntel, buildCompetitorEmbeds } from './agents/competitorIntel'
+import { runCompetitorIntel } from './agents/competitorIntel'
 import { COMPETITORS } from './config/competitors'
 
 dotenv.config()
