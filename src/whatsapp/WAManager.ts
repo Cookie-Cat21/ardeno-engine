@@ -185,32 +185,53 @@ export async function draftWhatsAppMessage(lead: any, member: TeamMember): Promi
   const Groq = (await import('groq-sdk')).default
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! })
 
+  const hasWebsite  = !!lead.website
+  const noWebsite   = !hasWebsite
+  const rating      = lead.google_rating
+  const gap         = lead.gap_analysis ?? ''
+  const pitch       = lead.pitch_angle  ?? ''
+
   const completion = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [{
       role: 'user',
-      content: `Write a SHORT WhatsApp message for ${member.name} from Ardeno Studio to send to this business:
+      content: `You are ${member.name} from Ardeno Studio, a web design agency in Sri Lanka. Write a WhatsApp cold outreach message to this business.
 
 Business: ${lead.business_name}
-Location: ${lead.location}
 Niche: ${lead.niche}
-Has website: ${lead.website ? 'Yes' : 'No'}
-Google rating: ${lead.google_rating ?? 'Unknown'}
-Pitch: ${lead.pitch_angle}
+Location: ${lead.location}
+Has website: ${hasWebsite ? `Yes — ${lead.website}` : 'No website found'}
+Google rating: ${rating ? `${rating}/5` : 'Unknown'}
+Their main gap: ${gap}
+Our angle: ${pitch}
 
-Rules:
-- Max 3 sentences
-- Casual and friendly — WhatsApp is informal
-- Mention one specific thing about their business
-- End with a simple question to get a reply
-- Sign off as "${member.name} from Ardeno Studio"
-- Do NOT use formal email language
-- No subject line needed
+TONE: Sound like a real person texting, NOT a sales bot. Curious and helpful, not pitchy.
 
-Return ONLY the message text, nothing else.`
+STRUCTURE (follow this exactly):
+1. One specific observation about THEIR business (not generic flattery) — reference their actual situation e.g. no website, or something about their niche
+2. One sentence that hints at the opportunity without being salesy
+3. A soft question that's easy to reply yes/no to
+
+STRICT RULES:
+- Max 3 sentences total
+- NO words like: "partnership", "revenue", "customers", "boost", "grow", "solutions", "services"
+- NO "I noticed you don't have a website" (too blunt) — be subtle
+- DO NOT say "Ardeno Studio can help" — just ask the question
+- Sign off with just "— ${member.name}, Ardeno" on a new line
+- Use 1 emoji max, naturally placed
+- Sound like ${member.name} is a 23 year old Sri Lankan guy texting from his phone
+
+GOOD EXAMPLE (restaurant with no website):
+"Hey! Tried to find ${lead.business_name} online to check the menu before visiting — couldn't find much 😅 Are you guys planning to get a proper site up anytime?
+— ${member.name}, Ardeno"
+
+BAD EXAMPLE (do NOT do this):
+"Hey, loved your 4.4 rating! By partnering with us you could attract more customers. Can we chat about how Ardeno Studio can help you grow?"
+
+Return ONLY the message, nothing else.`
     }],
-    temperature: 0.8,
-    max_tokens: 200
+    temperature: 0.85,
+    max_tokens: 220
   })
 
   return completion.choices[0]?.message?.content?.trim() ??
