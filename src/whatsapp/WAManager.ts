@@ -8,6 +8,15 @@ import { TEAM, TeamMember } from '../config/team'
 const sessions: Map<string, WAClient> = new Map()
 const ready: Map<string, boolean> = new Map()
 
+// Track phones we've actually sent outreach to — only notify for replies from these
+const outreachedPhones = new Set<string>()
+
+// Deduplicate message IDs — prevent same message firing twice
+const processedMsgIds = new Set<string>()
+
+// Ignore any message received before this timestamp (startup replays)
+const BOT_START_MS = Date.now()
+
 // Reply handler — registered from index.ts after bot is ready
 export type WAReplyHandler = (params: {
   discordId: string   // which founder's WhatsApp received the reply
@@ -20,6 +29,16 @@ let _replyHandler: WAReplyHandler | null = null
 
 export function onWhatsAppReply(handler: WAReplyHandler): void {
   _replyHandler = handler
+}
+
+/**
+ * Call this whenever we send a WhatsApp outreach to a lead.
+ * Only numbers registered here will trigger reply notifications.
+ */
+export function markPhoneSent(phone: string): void {
+  const normalized = normalizePhone(phone)
+  outreachedPhones.add(normalized)
+  console.log(`[WhatsApp] 📋 Tracking replies from: ${normalized}`)
 }
 
 export async function initWhatsApp(discordClient: DiscordClient): Promise<void> {
