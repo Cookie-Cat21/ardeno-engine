@@ -288,7 +288,7 @@ export interface RescanUpdate {
  * Returns list of updated leads so the caller can refresh Discord embeds.
  */
 export async function rescanMissingLeads(
-  leads: Array<{ id: string; business_name: string; google_maps_url?: string; phone?: string; website?: string; discord_message_id?: string }>,
+  leads: Array<{ id: string; business_name: string; location?: string; google_maps_url?: string; phone?: string; website?: string; discord_message_id?: string }>,
   onProgress: (msg: string) => Promise<void>
 ): Promise<{ updated: number; skipped: number; updatedLeads: RescanUpdate[] }> {
   const toScan = leads.filter(l => !l.phone || !l.website)
