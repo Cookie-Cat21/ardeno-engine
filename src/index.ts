@@ -1300,25 +1300,15 @@ createServer((_, res) => { res.writeHead(200); res.end('ok') })
 
 process.on('SIGTERM', () => console.log('[Boot] SIGTERM received'))
 
-// Login with exponential backoff — never crash on rate limits or transient failures
-let _loginAttempt = 0
-function attemptLogin() {
-  _loginAttempt++
-  const delay = Math.min(30_000 * _loginAttempt, 300_000) // 30s, 60s, 90s… max 5min
-  console.log(`[Boot] client.login attempt ${_loginAttempt}... token length: ${process.env.DISCORD_TOKEN?.length ?? 0}`)
+// Quick token validity check — separate REST call, no WebSocket, no rate-limit risk
+import https from 'https'
+const _tok = process.env.DISCORD_TOKEN ?? ''
+https.get({ hostname: 'discord.com', path: '/api/v10/users/@me', headers: { Authorization: `Bot ${_tok}` } }, (r) => {
+  let d = ''; r.on('data', c => d += c); r.on('end', () => console.log(`[Boot] Token check → HTTP ${r.statusCode}:`, d.slice(0, 120)))
+}).on('error', (e: Error) => console.error('[Boot] Token check network error:', e.message))
 
-  const timer = setTimeout(() => {
-    console.warn(`[Boot] client.login timed out (attempt ${_loginAttempt}) — Discord may be rate-limiting. Retrying in ${delay / 1000}s`)
-    setTimeout(attemptLogin, delay)
-  }, 60_000) // 60s timeout per attempt (generous for rate-limit recovery)
-
-  client.login(process.env.DISCORD_TOKEN)
-    .then(() => { clearTimeout(timer); console.log('[Boot] client.login resolved ✅') })
-    .catch((e) => {
-      clearTimeout(timer)
-      console.error(`[Boot] client.login FAILED (attempt ${_loginAttempt}):`, e?.message ?? e)
-      console.log(`[Boot] Retrying in ${delay / 1000}s...`)
-      setTimeout(attemptLogin, delay)
-    })
-}
-attemptLogin()
+// Login — no custom timeout, let discord.js handle rate-limit retry_after internally
+console.log(`[Boot] client.login... token length: ${_tok.length}`)
+client.login(process.env.DISCORD_TOKEN)
+  .then(() => console.log('[Boot] client.login resolved ✅'))
+  .catch((e) => console.error('[Boot] client.login FAILED:', e?.message ?? e))
