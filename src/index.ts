@@ -1025,7 +1025,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
     while (true) {
       const { data, error } = await supabase
         .from('leads')
-        .select('id, business_name, google_maps_url, phone, website, discord_message_id')
+        .select('id, business_name, location, google_maps_url, phone, website, discord_message_id')
         .or('phone.is.null,website.is.null')
         .order('created_at', { ascending: false })
         .range(from, from + PAGE - 1)
