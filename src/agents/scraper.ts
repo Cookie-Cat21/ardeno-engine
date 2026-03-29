@@ -74,6 +74,12 @@ async function googleSearchForDetails(
     // Pull full page text + non-Google links (for website detection)
     const searchData = await page.evaluate(() => {
       const text = document.body.innerText.slice(0, 4000)
+      return { text, links: [] as string[] }
+    })
+    console.log(`[Rescan] Google page snippet for "${businessName}":`, searchData.text.slice(0, 600))
+
+    const searchData2 = await page.evaluate(() => {
+      const text = document.body.innerText.slice(0, 4000)
       const links = Array.from(document.querySelectorAll('a[href]'))
         .map(a => (a as HTMLAnchorElement).href)
         .filter(h =>
