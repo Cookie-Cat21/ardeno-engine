@@ -52,7 +52,8 @@ async function initSession(member: TeamMember, discordClient: DiscordClient): Pr
     authStrategy: new LocalAuth({ clientId: member.discordId }),
     puppeteer: {
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     }
   })
 
