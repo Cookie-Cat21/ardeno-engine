@@ -3,9 +3,12 @@ import nodemailer from 'nodemailer'
 import type { Lead } from '../db/supabase'
 import type { TeamMember } from '../config/team'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! })
+// Lazy init — avoids crashing at import time if env vars aren't set yet
+let _groq: Groq | null = null
+const getGroq = () => _groq ??= new Groq({ apiKey: process.env.GROQ_API_KEY })
 
-const transporter = nodemailer.createTransport({
+let _transporter: nodemailer.Transporter | null = null
+const getTransporter = () => _transporter ??= nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.GMAIL_USER,
