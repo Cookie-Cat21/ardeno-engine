@@ -90,6 +90,8 @@ async function googleSearchForDetails(
       return { text, links }
     })
 
+    console.log(`[Rescan DEBUG] Google page for "${businessName}" (first 600 chars):\n${searchData.text.slice(0, 600)}`)
+
     const res = await getGroq().chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [{
