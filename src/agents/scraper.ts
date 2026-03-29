@@ -10,7 +10,7 @@ const getGroq = () => _groq ??= new Groq({ apiKey: process.env.GROQ_API_KEY })
 /** Use Groq to extract phone + website from raw Google Maps page text */
 async function extractDetailsWithAI(pageText: string): Promise<{ phone?: string; website?: string }> {
   try {
-    const res = await groq.chat.completions.create({
+    const res = await getGroq().chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [{
         role: 'user',
@@ -90,7 +90,7 @@ async function googleSearchForDetails(
       return { text, links }
     })
 
-    const res = await groq.chat.completions.create({
+    const res = await getGroq().chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [{
         role: 'user',
