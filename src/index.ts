@@ -1300,7 +1300,21 @@ createServer((_, res) => { res.writeHead(200); res.end('ok') })
 
 process.on('SIGTERM', () => console.log('[Boot] SIGTERM received'))
 
-console.log('[Boot] calling client.login...')
+// Quick connectivity check — tells us if Railway can reach Discord at all
+import https from 'https'
+https.get('https://discord.com/api/v10/gateway', (res) => {
+  console.log('[Boot] Discord API reachable, HTTP status:', res.statusCode)
+}).on('error', (e: Error) => {
+  console.error('[Boot] Cannot reach Discord API:', e.message)
+})
+
+// 30-second login timeout — fail fast instead of hanging silently
+const loginTimer = setTimeout(() => {
+  console.error('[Boot] client.login TIMEOUT after 30s — DISCORD_TOKEN may be wrong or network blocked')
+  process.exit(1)
+}, 30_000)
+
+console.log('[Boot] calling client.login... token length:', process.env.DISCORD_TOKEN?.length ?? 0)
 client.login(process.env.DISCORD_TOKEN)
-  .then(() => console.log('[Boot] client.login resolved'))
-  .catch((e) => console.error('[Boot] client.login FAILED:', e))
+  .then(() => { clearTimeout(loginTimer); console.log('[Boot] client.login resolved') })
+  .catch((e) => { clearTimeout(loginTimer); console.error('[Boot] client.login FAILED:', e) })
