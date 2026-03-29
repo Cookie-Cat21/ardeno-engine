@@ -54,14 +54,12 @@ async function googleSearchForDetails(
 ): Promise<{ phone?: string; website?: string }> {
   try {
     const query = encodeURIComponent(`${businessName} ${location} phone number`)
-    await page.goto(`https://www.bing.com/search?q=${query}`, {
+    // DuckDuckGo's plain HTML endpoint — no JS required, no CAPTCHA, bot-friendly
+    await page.goto(`https://html.duckduckgo.com/html/?q=${query}`, {
       waitUntil: 'domcontentloaded',
       timeout: 15000
     })
-
-    // Wait for Bing results to render (knowledge panel loads after initial paint)
-    await page.waitForSelector('#b_results', { timeout: 8000 }).catch(() => {})
-    await new Promise(r => setTimeout(r, 2000))
+    await new Promise(r => setTimeout(r, 1500))
 
     // Pull full page text + non-Google links (for website detection)
     const searchData = await page.evaluate(() => {
