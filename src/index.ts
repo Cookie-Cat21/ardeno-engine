@@ -141,8 +141,7 @@ client.once(Events.ClientReady, async (c) => {
   c.user.setActivity('ao help', { type: ActivityType.Listening })
 
   // Init WhatsApp sessions for all team members
-  // TODO: uncomment when ready to enable WhatsApp
-  // initWhatsApp(c).catch(console.error)
+  initWhatsApp(c).catch(console.error)
 
   // TODO: uncomment when WhatsApp is re-enabled
   // onWhatsAppReply(async ({ discordId, senderPhone, body, timestamp }) => { ... })
