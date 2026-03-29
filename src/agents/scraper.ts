@@ -53,23 +53,15 @@ async function googleSearchForDetails(
   page: any
 ): Promise<{ phone?: string; website?: string }> {
   try {
-    const query = encodeURIComponent(`${businessName} ${location}`)
-    await page.goto(`https://www.google.com/search?q=${query}`, {
+    const query = encodeURIComponent(`${businessName} ${location} phone number`)
+    await page.goto(`https://www.bing.com/search?q=${query}`, {
       waitUntil: 'domcontentloaded',
       timeout: 15000
     })
 
-    // Dismiss cookie consent (blocks knowledge panel from rendering on EU servers)
-    await page.evaluate(() => {
-      const btn = Array.from(document.querySelectorAll('button'))
-        .find(b => /accept all|i agree|agree|accept/i.test(b.textContent ?? ''))
-      if (btn) (btn as HTMLElement).click()
-    }).catch(() => {})
-
-    // Wait for search results AND the knowledge panel to fully render
-    // The phone number lives in JS-rendered content that loads after domcontentloaded
-    await page.waitForSelector('#search', { timeout: 8000 }).catch(() => {})
-    await new Promise(r => setTimeout(r, 2500)) // let knowledge panel JS finish rendering
+    // Wait for Bing results to render (knowledge panel loads after initial paint)
+    await page.waitForSelector('#b_results', { timeout: 8000 }).catch(() => {})
+    await new Promise(r => setTimeout(r, 2000))
 
     // Pull full page text + non-Google links (for website detection)
     const searchData = await page.evaluate(() => {
