@@ -358,7 +358,7 @@ export async function rescanMissingLeads(
         // If Maps page is still missing phone or website, try Google search fallback
         if (!lead.phone && !details.phone || !lead.website && !details.website) {
           console.log(`[Rescan] Missing details for ${lead.business_name} — trying Google search`)
-          const locationGuess = lead.google_maps_url?.match(/place\/[^/]+\/([^/]+)/)?.[1] ?? ''
+          const locationGuess = lead.location ?? ''
           const googleDetails = await googleSearchForDetails(lead.business_name, locationGuess, page)
           if (!details.phone && googleDetails.phone)     { details.phone   = googleDetails.phone;   console.log(`[Rescan] 📞 Found phone via Google: ${details.phone}`) }
           if (!details.website && googleDetails.website) { details.website = googleDetails.website; console.log(`[Rescan] 🌐 Found website via Google: ${details.website}`) }
