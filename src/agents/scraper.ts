@@ -86,9 +86,9 @@ async function googleSearchForDetails(
       model: 'llama-3.3-70b-versatile',
       messages: [{
         role: 'user',
-        content: `Extract the phone number and official website for "${businessName}" in ${location} from this Google search page.
+        content: `Extract the phone number and official website for "${businessName}" in ${location} from this Bing search page.
 
-The knowledge panel on the right side of Google search results usually shows the phone number directly.
+The knowledge panel on the right side of Bing search results usually shows the phone number directly.
 
 Links found on the page:
 ${searchData.links.join('\n')}
