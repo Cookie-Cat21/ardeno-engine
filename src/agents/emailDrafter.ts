@@ -57,7 +57,7 @@ Return ONLY a JSON object with exactly these fields:
   "body": "full email body with line breaks using \\n"
 }`
 
-  const completion = await groq.chat.completions.create({
+  const completion = await getGroq().chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.7,
