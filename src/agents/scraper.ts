@@ -110,13 +110,15 @@ Return ONLY valid JSON:
     })
 
     const raw = res.choices[0].message.content?.trim() ?? '{}'
+    console.log(`[Rescan DEBUG] AI raw response for "${businessName}":`, raw)
     const json = raw.match(/\{.*\}/s)?.[0] ?? '{}'
     const parsed = JSON.parse(json)
     return {
       phone:   parsed.phone   ?? undefined,
       website: parsed.website ?? undefined
     }
-  } catch {
+  } catch (e: any) {
+    console.log(`[Rescan DEBUG] googleSearchForDetails error for "${businessName}":`, e?.message)
     return {}
   }
 }
