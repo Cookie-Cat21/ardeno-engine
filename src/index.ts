@@ -1294,4 +1294,14 @@ function runWebsiteAudit(
     .catch(() => null)
 }
 
+// Keep process alive + give Railway a health check endpoint
+import { createServer } from 'http'
+createServer((_, res) => { res.writeHead(200); res.end('ok') })
+  .listen(process.env.PORT ?? 3000)
+
+process.on('SIGTERM', () => console.log('[Boot] SIGTERM received'))
+
+console.log('[Boot] calling client.login...')
 client.login(process.env.DISCORD_TOKEN)
+  .then(() => console.log('[Boot] client.login resolved'))
+  .catch((e) => console.error('[Boot] client.login FAILED:', e))
