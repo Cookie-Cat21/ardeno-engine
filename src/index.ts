@@ -1300,21 +1300,25 @@ createServer((_, res) => { res.writeHead(200); res.end('ok') })
 
 process.on('SIGTERM', () => console.log('[Boot] SIGTERM received'))
 
-// Quick connectivity check — tells us if Railway can reach Discord at all
-import https from 'https'
-https.get('https://discord.com/api/v10/gateway', (res) => {
-  console.log('[Boot] Discord API reachable, HTTP status:', res.statusCode)
-}).on('error', (e: Error) => {
-  console.error('[Boot] Cannot reach Discord API:', e.message)
-})
+// Login with exponential backoff — never crash on rate limits or transient failures
+let _loginAttempt = 0
+function attemptLogin() {
+  _loginAttempt++
+  const delay = Math.min(30_000 * _loginAttempt, 300_000) // 30s, 60s, 90s… max 5min
+  console.log(`[Boot] client.login attempt ${_loginAttempt}... token length: ${process.env.DISCORD_TOKEN?.length ?? 0}`)
 
-// 30-second login timeout — fail fast instead of hanging silently
-const loginTimer = setTimeout(() => {
-  console.error('[Boot] client.login TIMEOUT after 30s — DISCORD_TOKEN may be wrong or network blocked')
-  process.exit(1)
-}, 30_000)
+  const timer = setTimeout(() => {
+    console.warn(`[Boot] client.login timed out (attempt ${_loginAttempt}) — Discord may be rate-limiting. Retrying in ${delay / 1000}s`)
+    setTimeout(attemptLogin, delay)
+  }, 60_000) // 60s timeout per attempt (generous for rate-limit recovery)
 
-console.log('[Boot] calling client.login... token length:', process.env.DISCORD_TOKEN?.length ?? 0)
-client.login(process.env.DISCORD_TOKEN)
-  .then(() => { clearTimeout(loginTimer); console.log('[Boot] client.login resolved') })
-  .catch((e) => { clearTimeout(loginTimer); console.error('[Boot] client.login FAILED:', e) })
+  client.login(process.env.DISCORD_TOKEN)
+    .then(() => { clearTimeout(timer); console.log('[Boot] client.login resolved ✅') })
+    .catch((e) => {
+      clearTimeout(timer)
+      console.error(`[Boot] client.login FAILED (attempt ${_loginAttempt}):`, e?.message ?? e)
+      console.log(`[Boot] Retrying in ${delay / 1000}s...`)
+      setTimeout(attemptLogin, delay)
+    })
+}
+attemptLogin()
