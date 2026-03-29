@@ -87,9 +87,9 @@ async function googleSearchForDetails(
       model: 'llama-3.3-70b-versatile',
       messages: [{
         role: 'user',
-        content: `Extract the phone number and official website for "${businessName}" in ${location} from this Bing search page.
+        content: `Extract the phone number and official website for "${businessName}" in ${location} from these DuckDuckGo search results.
 
-The knowledge panel on the right side of Bing search results usually shows the phone number directly.
+Look through the search result snippets for any phone number mentioned.
 
 Links found on the page:
 ${searchData.links.join('\n')}
