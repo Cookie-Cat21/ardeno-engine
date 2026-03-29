@@ -82,6 +82,9 @@ async function googleSearchForDetails(
       return { text, links }
     })
 
+    console.log(`[Rescan DEBUG] Bing page for "${businessName}" (first 800 chars):\n${searchData.text.slice(0, 800)}`)
+    console.log(`[Rescan DEBUG] Links:`, searchData.links.slice(0, 5))
+
     const res = await getGroq().chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [{
