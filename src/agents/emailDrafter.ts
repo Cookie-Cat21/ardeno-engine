@@ -85,7 +85,7 @@ Return ONLY a JSON object with exactly these fields:
 }
 
 export async function sendEmail(draft: EmailDraft): Promise<void> {
-  await transporter.sendMail({
+  await getTransporter().sendMail({
     from: `"Ardeno Studio" <${process.env.GMAIL_USER}>`,
     to: draft.to,
     subject: draft.subject,
