@@ -3,7 +3,12 @@ import axios from 'axios'
 import Groq from 'groq-sdk'
 import { getBrowserConfig } from '../utils/browser'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+// Lazy init — avoids crashing at import time if GROQ_API_KEY isn't set yet
+let _groq: Groq | null = null
+const groq = { chat: { completions: { create: (...args: Parameters<Groq['chat']['completions']['create']>) => {
+  _groq ??= new Groq({ apiKey: process.env.GROQ_API_KEY })
+  return _groq.chat.completions.create(...args)
+} } } } as unknown as Groq
 
 /** Use Groq to extract phone + website from raw Google Maps page text */
 async function extractDetailsWithAI(pageText: string): Promise<{ phone?: string; website?: string }> {
