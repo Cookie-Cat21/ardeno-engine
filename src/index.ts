@@ -1300,15 +1300,66 @@ createServer((_, res) => { res.writeHead(200); res.end('ok') })
 
 process.on('SIGTERM', () => console.log('[Boot] SIGTERM received'))
 
-// Quick token validity check — separate REST call, no WebSocket, no rate-limit risk
+// ── Token check + auto-fallback login ────────────────────────────────────────
+// Checks primary token via REST first. If it's 429 (rate limited) and a backup
+// token is configured, automatically switches to the backup bot token instead.
 import https from 'https'
-const _tok = process.env.DISCORD_TOKEN ?? ''
-https.get({ hostname: 'discord.com', path: '/api/v10/users/@me', headers: { Authorization: `Bot ${_tok}` } }, (r) => {
-  let d = ''; r.on('data', c => d += c); r.on('end', () => console.log(`[Boot] Token check → HTTP ${r.statusCode}:`, d.slice(0, 120)))
-}).on('error', (e: Error) => console.error('[Boot] Token check network error:', e.message))
 
-// Login — no custom timeout, let discord.js handle rate-limit retry_after internally
-console.log(`[Boot] client.login... token length: ${_tok.length}`)
-client.login(process.env.DISCORD_TOKEN)
-  .then(() => console.log('[Boot] client.login resolved ✅'))
-  .catch((e) => console.error('[Boot] client.login FAILED:', e?.message ?? e))
+function checkToken(token: string): Promise<number> {
+  return new Promise((resolve) => {
+    https.get(
+      { hostname: 'discord.com', path: '/api/v10/users/@me', headers: { Authorization: `Bot ${token}` } },
+      (r) => {
+        let d = ''
+        r.on('data', (c) => d += c)
+        r.on('end', () => {
+          console.log(`[Boot] Token check → HTTP ${r.statusCode}:`, d.slice(0, 120))
+          resolve(r.statusCode ?? 0)
+        })
+      }
+    ).on('error', (e: Error) => {
+      console.error('[Boot] Token check network error:', e.message)
+      resolve(0)
+    })
+  })
+}
+
+async function loginWithFallback() {
+  const primary = process.env.DISCORD_TOKEN ?? ''
+  const backup  = process.env.DISCORD_TOKEN_BACKUP ?? ''
+
+  console.log(`[Boot] Checking primary token (length: ${primary.length})...`)
+  const primaryStatus = await checkToken(primary)
+
+  if (primaryStatus !== 429) {
+    // Token is either valid (200) or invalid (401) — let discord.js sort it out
+    console.log('[Boot] Using primary token for login')
+    await client.login(primary)
+    console.log('[Boot] client.login resolved ✅ (primary)')
+    return
+  }
+
+  // Primary is 429 — try backup if available
+  if (backup) {
+    console.log('[Boot] ⚠️ Primary token rate-limited (429). Trying backup token...')
+    console.log(`[Boot] Checking backup token (length: ${backup.length})...`)
+    const backupStatus = await checkToken(backup)
+
+    if (backupStatus !== 401) {
+      console.log('[Boot] Using backup token for login')
+      await client.login(backup)
+      console.log('[Boot] client.login resolved ✅ (backup)')
+      return
+    }
+
+    console.log('[Boot] ❌ Backup token is invalid (401). Falling back to primary anyway.')
+  } else {
+    console.log('[Boot] No backup token configured — waiting on primary (discord.js will retry rate-limit internally)')
+  }
+
+  // Last resort: login with primary and let discord.js handle the retry_after
+  await client.login(primary)
+  console.log('[Boot] client.login resolved ✅ (primary, after wait)')
+}
+
+loginWithFallback().catch((e) => console.error('[Boot] Login failed:', e?.message ?? e))
